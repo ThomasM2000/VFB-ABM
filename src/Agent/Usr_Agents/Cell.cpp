@@ -912,7 +912,7 @@ float Stem::get_apoptosis_chance() {
 }
 
 float Stem::get_OCR() {
-	return Stem::OCR;
+	return Stem::OCR / 2; // convert fmol/cell/h to fmol/cell/tick
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1018,7 +1018,7 @@ float Progen::get_apoptosis_chance() {
 }
 
 float Progen::get_OCR() {
-	return Progen::OCR;
+	return Progen::OCR / 2; // convert fmol/cell/h to fmol/cell/tick
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1130,5 +1130,5 @@ float NP::get_apoptosis_chance() {
 }
 
 float NP::get_OCR() {
-	return NP::OCR;
+	return NP::OCR / 2; // convert fmol/cell/h to fmol/cell/tick
 }
