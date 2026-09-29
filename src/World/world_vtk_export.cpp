@@ -151,9 +151,7 @@ bool export_world_ecm_to_vti(const BMWorld& world, const std::string& filename,
             for (int x = 0; x < nx; ++x)
             {
                 const int idx = x + nx * (y + ny * z);
-                const double collagen_total =
-                    world.worldECM[idx].ocollagen[write_t] +
-                    world.worldECM[idx].ncollagen[write_t];
+                const double collagen_total = world.worldECM[idx].ncollagen[write_t];
                 f << collagen_total << " ";
             }
             f << "\n";
@@ -161,24 +159,6 @@ bool export_world_ecm_to_vti(const BMWorld& world, const std::string& filename,
     }
     f << "</DataArray>\n";
 
-    // --- Aggrecan (oaggrecan + naggrecan) ---
-    f << "<DataArray type=\"Float64\" Name=\"aggrecan\" format=\"ascii\">\n";
-    for (int z = 0; z < nz; ++z)
-    {
-        for (int y = 0; y < ny; ++y)
-        {
-            for (int x = 0; x < nx; ++x)
-            {
-                const int idx = x + nx * (y + ny * z);
-                const double aggrecan_total =
-                    world.worldECM[idx].oaggrecan[write_t] +
-                    world.worldECM[idx].naggrecan[write_t];
-                f << aggrecan_total << " ";
-            }
-            f << "\n";
-        }
-    }
-    f << "</DataArray>\n";
 
     f << "</PointData>\n";
     f << "</Piece>\n";

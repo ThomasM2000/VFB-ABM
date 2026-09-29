@@ -47,24 +47,47 @@ WorldInitParams load_world_init_config(const std::string &path)
         "world_init config: missing 'world_init' section in " + path);
 
   const json &section = root.at("world_init");
-  reject_unknown_keys(section,
-                      {"description", "msc_count", "alginate", "peptide"},
-                      "world_init");
+  reject_unknown_keys(
+      section, {"description", "fibroblast_count", "biomaterial", "initial_ecm"},
+      "world_init");
 
   WorldInitParams cfg;
-  cfg.msc_count = section.at("msc_count").get<int>();
+  cfg.fibroblast_count = section.at("fibroblast_count").get<int>();
+  if (cfg.fibroblast_count < 0)
+    throw std::invalid_argument(
+        "world_init config: fibroblast_count must be >= 0");
 
-  const json &alg = section.at("alginate");
-  reject_unknown_keys(
-      alg, {"wv_percent", "high_mw_ratio", "low_mw_ratio", "ca_mm"},
-      "world_init.alginate");
-  cfg.alginate.wv_percent = alg.at("wv_percent").get<double>();
-  cfg.alginate.high_mw_ratio = alg.at("high_mw_ratio").get<double>();
-  cfg.alginate.low_mw_ratio = alg.at("low_mw_ratio").get<double>();
-  cfg.alginate.ca_mm = alg.at("ca_mm").get<double>();
+  const json &bm = section.at("biomaterial");
+  reject_unknown_keys(bm,
+                      {"description", "ha_gtn_ratio", "ha_wv_percent",
+                        "gtn_wv_percent", "pegda_wv_percent",
+                        "thiol_double_bond_molar_ratio"},
+                      "world_init.biomaterial");
+  cfg.biomaterial.ha_gtn_ratio     = bm.at("ha_gtn_ratio").get<double>();
+  cfg.biomaterial.ha_wv_percent    = bm.at("ha_wv_percent").get<double>();
+  cfg.biomaterial.gtn_wv_percent   = bm.at("gtn_wv_percent").get<double>();
+  cfg.biomaterial.pegda_wv_percent = bm.at("pegda_wv_percent").get<double>();
+  cfg.biomaterial.thiol_double_bond_molar_ratio =
+      bm.at("thiol_double_bond_molar_ratio").get<double>();
 
-  if (section.contains("peptide"))
-    cfg.peptide = section.at("peptide").get<std::string>();
+  if (cfg.biomaterial.ha_gtn_ratio <= 0.0)
+    throw std::invalid_argument(
+        "world_init config: biomaterial.ha_gtn_ratio must be > 0");
+
+  /* initial_ecm is optional; struct defaults apply when absent. */
+  if (section.contains("initial_ecm")) {
+    const json &ecm = section.at("initial_ecm");
+    reject_unknown_keys(ecm,
+                        {"description", "collagen_per_patch",
+                          "elastin_per_patch", "ha_per_patch"},
+                        "world_init.initial_ecm");
+    if (ecm.contains("collagen_per_patch"))
+      cfg.initial_ecm.collagen_per_patch = ecm.at("collagen_per_patch").get<double>();
+    if (ecm.contains("elastin_per_patch"))
+      cfg.initial_ecm.elastin_per_patch = ecm.at("elastin_per_patch").get<double>();
+    if (ecm.contains("ha_per_patch"))
+      cfg.initial_ecm.ha_per_patch = ecm.at("ha_per_patch").get<double>();
+  }
 
   return cfg;
 }

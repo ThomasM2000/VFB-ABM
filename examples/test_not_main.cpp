@@ -38,43 +38,43 @@
 
 using namespace std;
 
-/*
- * Description:	Outputs the color of each patch to the given file.
- *              Outputs the color of the agent that is one the patch and if
- * there is no agent, then outputs the color of the patch type. Also prints the
- * number of patches that are chondrocyte, new chondrocyte, black, and the total
- * number of patches.
- *
- * Return: 0 if succesful
- *
- * Parameters: BMWorld*  -- Pointer to the wound healing world whose patches'
- * colors should be outputted. char*     -- Output file name
- */
-int outputColor(BMWorld *, char *);
+// /*
+//  * Description:	Outputs the color of each patch to the given file.
+//  *              Outputs the color of the agent that is one the patch and if
+//  * there is no agent, then outputs the color of the patch type. Also prints the
+//  * number of patches that are chondrocyte, new chondrocyte, black, and the total
+//  * number of patches.
+//  *
+//  * Return: 0 if succesful
+//  *
+//  * Parameters: BMWorld*  -- Pointer to the wound healing world whose patches'
+//  * colors should be outputted. char*     -- Output file name
+//  */
+// int outputColor(BMWorld *, char *);
 
-/*
- * Description:	Outputs the color of each patch to the given file.
- *              Outputs the color of the ECM that is one the patch and if there
- * is no ECM, then outputs the color of the patch type.
- *
- * Return: 0 if succesful
- *
- * Parameters: myWorld   -- Pointer to the wound healing world whose patches'
- * colors should be outputted. fileName  -- Output file name
- */
-int outputECM(BMWorld *myWorld, char *fileName);
+// /*
+//  * Description:	Outputs the color of each patch to the given file.
+//  *              Outputs the color of the ECM that is one the patch and if there
+//  * is no ECM, then outputs the color of the patch type.
+//  *
+//  * Return: 0 if succesful
+//  *
+//  * Parameters: myWorld   -- Pointer to the wound healing world whose patches'
+//  * colors should be outputted. fileName  -- Output file name
+//  */
+// int outputECM(BMWorld *myWorld, char *fileName);
 
-/*
- * Description:	Outputs the chemical concentration of the given chemical on each
- * patch to the given file.
- *
- * Return: 0 if succesful
- *
- * Parameters: BMWorld*  -- Pointer to the wound healing world whose patches'
- * colors should be outputted. char*     -- Output file name int       -- Enumic
- * value of the chemical type to output
- */
-int outputChem(BMWorld *, char *, int);
+// /*
+//  * Description:	Outputs the chemical concentration of the given chemical on each
+//  * patch to the given file.
+//  *
+//  * Return: 0 if succesful
+//  *
+//  * Parameters: BMWorld*  -- Pointer to the wound healing world whose patches'
+//  * colors should be outputted. char*     -- Output file name int       -- Enumic
+//  * value of the chemical type to output
+//  */
+// int outputChem(BMWorld *, char *, int);
 
 /*
  * Description:	Main method for model simulation. Sets up the world and executes
@@ -239,155 +239,155 @@ int main(int argc, char **argv) {
   return 0;
 } // End Main
 
-int outputColor(BMWorld *myWorld, char *fileName) {
-  int dam = 0, tissue = 0, numCaAlg = 0, cells = 0, newCell = 0, stems = 0,
-      progens = 0, nps = 0, total = 0, black = 0, actDam = 0;
-  ofstream outfile(fileName);
+// int outputColor(BMWorld *myWorld, char *fileName) {
+//   int dam = 0, tissue = 0, numCaAlg = 0, cells = 0, newCell = 0, stems = 0,
+//       progens = 0, nps = 0, total = 0, black = 0, actDam = 0;
+//   ofstream outfile(fileName);
 
-  /* Prepare legacy VTK file format for for visualization with Paraview 3.0 */
-  outfile << "# vtk DataFile Version 2.0" << endl;
-  outfile << "Really cool data " << endl;
-  outfile << "ASCII " << endl;
-  outfile << "DATASET STRUCTURED_POINTS " << endl;
-  outfile << "DIMENSIONS " << myWorld->nx << " " << myWorld->ny << " "
-          << myWorld->nz << endl;
-  outfile << "ORIGIN 0 0 0 " << endl;
-  outfile << "SPACING 1 1 1 " << endl;
-  outfile << "POINT_DATA " << myWorld->nx * myWorld->ny * myWorld->nz << endl;
-  outfile << "SCALARS Color int 1 " << endl;
-  outfile << "LOOKUP_TABLE default " << endl;
+//   /* Prepare legacy VTK file format for for visualization with Paraview 3.0 */
+//   outfile << "# vtk DataFile Version 2.0" << endl;
+//   outfile << "Really cool data " << endl;
+//   outfile << "ASCII " << endl;
+//   outfile << "DATASET STRUCTURED_POINTS " << endl;
+//   outfile << "DIMENSIONS " << myWorld->nx << " " << myWorld->ny << " "
+//           << myWorld->nz << endl;
+//   outfile << "ORIGIN 0 0 0 " << endl;
+//   outfile << "SPACING 1 1 1 " << endl;
+//   outfile << "POINT_DATA " << myWorld->nx * myWorld->ny * myWorld->nz << endl;
+//   outfile << "SCALARS Color int 1 " << endl;
+//   outfile << "LOOKUP_TABLE default " << endl;
 
-  int in = 0;
-  for (int iz = 0; iz < myWorld->nz; iz++) {
-    for (int iy = 0; iy < myWorld->ny; iy++) {
-      for (int ix = 0; ix < myWorld->nx; ix++) {
+//   int in = 0;
+//   for (int iz = 0; iz < myWorld->nz; iz++) {
+//     for (int iy = 0; iy < myWorld->ny; iy++) {
+//       for (int ix = 0; ix < myWorld->nx; ix++) {
 
-        if (ix == (myWorld->nx - 1) && iy == (myWorld->ny - 1)) {
-          outfile << "195"; // Visualization color legend upper bound
+//         if (ix == (myWorld->nx - 1) && iy == (myWorld->ny - 1)) {
+//           outfile << "195"; // Visualization color legend upper bound
 
-        } else if (ix == (myWorld->nx - 2) && iy == (myWorld->ny - 1)) {
-          outfile << "0 "; // Visualization color legend lower bound
+//         } else if (ix == (myWorld->nx - 2) && iy == (myWorld->ny - 1)) {
+//           outfile << "0 "; // Visualization color legend lower bound
 
-        } else {
-          in = ix + iy * myWorld->nx + iz * myWorld->nx * myWorld->ny;
-          outfile << (myWorld->worldPatch[in].color[read_t])
-                  << " "; // Output the color on each patch
+//         } else {
+//           in = ix + iy * myWorld->nx + iz * myWorld->nx * myWorld->ny;
+//           outfile << (myWorld->worldPatch[in].color[read_t])
+//                   << " "; // Output the color on each patch
 
-          // Count the number of cells and patch types:
-          if (myWorld->worldPatch[in].occupiedby[read_t] == cell)
-            cells++;
+//           // Count the number of cells and patch types:
+//           if (myWorld->worldPatch[in].occupiedby[read_t] == cell)
+//             cells++;
 
-          else if (myWorld->worldPatch[in].type[read_t] == stem)
-            stems++;
+//           else if (myWorld->worldPatch[in].type[read_t] == stem)
+//             stems++;
 
-          else if (myWorld->worldPatch[in].type[read_t] == progen)
-            progens++;
+//           else if (myWorld->worldPatch[in].type[read_t] == progen)
+//             progens++;
 
-          else if (myWorld->worldPatch[in].type[read_t] == np)
-            nps++;
+//           else if (myWorld->worldPatch[in].type[read_t] == np)
+//             nps++;
 
-          else if (myWorld->worldPatch[in].type[read_t] == CaAlg)
-            numCaAlg++;
+//           else if (myWorld->worldPatch[in].type[read_t] == CaAlg)
+//             numCaAlg++;
 
-          else if (myWorld->worldPatch[in].type[read_t] == damage)
-            black++;
-          else {
-            // cout << "the color is " << myWorld->worldPatch[in].color << " and
-            // location is "; cout << ix << " " << iy << endl;
-          }
-          total++;
-        }
-      }
-      outfile << endl;
-    }
-  }
+//           else if (myWorld->worldPatch[in].type[read_t] == damage)
+//             black++;
+//           else {
+//             // cout << "the color is " << myWorld->worldPatch[in].color << " and
+//             // location is "; cout << ix << " " << iy << endl;
+//           }
+//           total++;
+//         }
+//       }
+//       outfile << endl;
+//     }
+//   }
 
-  /* // Output the cell & patch type counts:
-  cout << "file name is " << fileName << endl;
-      cout << " the counts are: all cells " << cells << " , stems " << stem << "
-  , progenitors " << progens << " , NP cells " << nps << endl; cout << " damage
-  " << black << " , CaAlg " << numCaAlg << " , total " << total << endl; cout <<
-  " to check, the num of cells are " << Cell::numOfCells << endl;
-      */
-  return 0;
+//   /* // Output the cell & patch type counts:
+//   cout << "file name is " << fileName << endl;
+//       cout << " the counts are: all cells " << cells << " , stems " << stem << "
+//   , progenitors " << progens << " , NP cells " << nps << endl; cout << " damage
+//   " << black << " , CaAlg " << numCaAlg << " , total " << total << endl; cout <<
+//   " to check, the num of cells are " << Cell::numOfCells << endl;
+//       */
+//   return 0;
 
-} // End outputColor
+// } // End outputColor
 
-int outputECM(BMWorld *myWorld, char *fileName) {
-  /* Prepare legacy VTK file format for for visualization with Paraview 3.0 */
-  ofstream outfile(fileName);
-  outfile << "# vtk DataFile Version 2.0" << endl;
-  outfile << "Really cool data " << endl;
-  outfile << "ASCII " << endl;
-  outfile << "DATASET STRUCTURED_POINTS " << endl;
-  outfile << "DIMENSIONS " << myWorld->nx << " " << myWorld->ny << " "
-          << myWorld->nz << endl;
-  outfile << "ORIGIN 0 0 0 " << endl;
-  outfile << "SPACING 1 1 1 " << endl;
-  outfile << "POINT_DATA " << myWorld->nx * myWorld->ny * myWorld->nz << endl;
-  outfile << "SCALARS Color int 1 " << endl;
-  outfile << "LOOKUP_TABLE default " << endl;
+// int outputECM(BMWorld *myWorld, char *fileName) {
+//   /* Prepare legacy VTK file format for for visualization with Paraview 3.0 */
+//   ofstream outfile(fileName);
+//   outfile << "# vtk DataFile Version 2.0" << endl;
+//   outfile << "Really cool data " << endl;
+//   outfile << "ASCII " << endl;
+//   outfile << "DATASET STRUCTURED_POINTS " << endl;
+//   outfile << "DIMENSIONS " << myWorld->nx << " " << myWorld->ny << " "
+//           << myWorld->nz << endl;
+//   outfile << "ORIGIN 0 0 0 " << endl;
+//   outfile << "SPACING 1 1 1 " << endl;
+//   outfile << "POINT_DATA " << myWorld->nx * myWorld->ny * myWorld->nz << endl;
+//   outfile << "SCALARS Color int 1 " << endl;
+//   outfile << "LOOKUP_TABLE default " << endl;
 
-  // Assign and output the appropriate color to each patch:
-  int in = 0;
-  for (int iz = 0; iz < myWorld->nz; iz++) {
-    for (int iy = 0; iy < myWorld->ny; iy++) {
-      for (int ix = 0; ix < myWorld->nx; ix++) {
-        in = ix + iy * myWorld->nx + iz * myWorld->nx * myWorld->ny;
+//   // Assign and output the appropriate color to each patch:
+//   int in = 0;
+//   for (int iz = 0; iz < myWorld->nz; iz++) {
+//     for (int iy = 0; iy < myWorld->ny; iy++) {
+//       for (int ix = 0; ix < myWorld->nx; ix++) {
+//         in = ix + iy * myWorld->nx + iz * myWorld->nx * myWorld->ny;
 
-        if (myWorld->worldECM[in].empty[read_t] == false) {
-          if (myWorld->worldECM[in].oaggrecan[read_t] != 0 ||
-              myWorld->worldECM[in].naggrecan[read_t] != 0) {
-            outfile << caggrecan << " ";
+//         if (myWorld->worldECM[in].empty[read_t] == false) {
+//           if (myWorld->worldECM[in].oaggrecan[read_t] != 0 ||
+//               myWorld->worldECM[in].naggrecan[read_t] != 0) {
+//             outfile << caggrecan << " ";
 
-          } else if (myWorld->worldECM[in].faggrecan[read_t] != 0) {
-            outfile << cfaggrecan << " ";
+//           } else if (myWorld->worldECM[in].faggrecan[read_t] != 0) {
+//             outfile << cfaggrecan << " ";
 
-          } else if (myWorld->worldECM[in].ocollagen[read_t] != 0 ||
-                     myWorld->worldECM[in].ncollagen[read_t] != 0) {
-            outfile << ccollagen << " ";
+//           } else if (myWorld->worldECM[in].ocollagen[read_t] != 0 ||
+//                      myWorld->worldECM[in].ncollagen[read_t] != 0) {
+//             outfile << ccollagen << " ";
 
-          } else if (myWorld->worldECM[in].fcollagen[read_t] != 0) {
-            outfile << cfcollagen << " ";
-          }
-        } else
-          outfile << myWorld->worldPatch[in].getColorfromType() << " ";
-      }
-      outfile << endl;
-    }
-  }
-  return 0;
+//           } else if (myWorld->worldECM[in].fcollagen[read_t] != 0) {
+//             outfile << cfcollagen << " ";
+//           }
+//         } else
+//           outfile << myWorld->worldPatch[in].getColorfromType() << " ";
+//       }
+//       outfile << endl;
+//     }
+//   }
+//   return 0;
 
-} // End outputECM
+// } // End outputECM
 
-int outputChem(BMWorld *myWorld, char *fileName, int chemIndex) {
+// int outputChem(BMWorld *myWorld, char *fileName, int chemIndex) {
 
-  /* Prepare legacy VTK file format for for visualization with Paraview 3.0 */
-  ofstream outfile(fileName);
-  outfile << "# vtk DataFile Version 2.0" << endl;
-  outfile << "Really cool data " << endl;
-  outfile << "ASCII " << endl;
-  outfile << "DATASET STRUCTURED_POINTS " << endl;
-  outfile << "DIMENSIONS " << myWorld->nx << " " << myWorld->ny << " "
-          << myWorld->nz << endl;
-  outfile << "ORIGIN 0 0 0 " << endl;
-  outfile << "SPACING 1 1 1 " << endl;
-  outfile << "POINT_DATA " << myWorld->nx * myWorld->ny * myWorld->nz << endl;
-  outfile << "SCALARS Color float 1 " << endl;
-  outfile << "LOOKUP_TABLE default " << endl;
+//   /* Prepare legacy VTK file format for for visualization with Paraview 3.0 */
+//   ofstream outfile(fileName);
+//   outfile << "# vtk DataFile Version 2.0" << endl;
+//   outfile << "Really cool data " << endl;
+//   outfile << "ASCII " << endl;
+//   outfile << "DATASET STRUCTURED_POINTS " << endl;
+//   outfile << "DIMENSIONS " << myWorld->nx << " " << myWorld->ny << " "
+//           << myWorld->nz << endl;
+//   outfile << "ORIGIN 0 0 0 " << endl;
+//   outfile << "SPACING 1 1 1 " << endl;
+//   outfile << "POINT_DATA " << myWorld->nx * myWorld->ny * myWorld->nz << endl;
+//   outfile << "SCALARS Color float 1 " << endl;
+//   outfile << "LOOKUP_TABLE default " << endl;
 
-  // Output the chemical concentration on each patch:
-  for (int iz = 0; iz < myWorld->nz; iz++) {
-    for (int iy = 0; iy < myWorld->ny; iy++) {
-      for (int ix = 0; ix < myWorld->nx; ix++) {
-        int in = ix + iy * myWorld->nx + iz * myWorld->nx * myWorld->ny;
-        const float *grid =
-            myWorld->chemical_environment()->channel_grid(chemIndex);
-        outfile << grid[in] << " ";
-      }
-      outfile << endl;
-    }
-  }
-  return 0;
+//   // Output the chemical concentration on each patch:
+//   for (int iz = 0; iz < myWorld->nz; iz++) {
+//     for (int iy = 0; iy < myWorld->ny; iy++) {
+//       for (int ix = 0; ix < myWorld->nx; ix++) {
+//         int in = ix + iy * myWorld->nx + iz * myWorld->nx * myWorld->ny;
+//         const float *grid =
+//             myWorld->chemical_environment()->channel_grid(chemIndex);
+//         outfile << grid[in] << " ";
+//       }
+//       outfile << endl;
+//     }
+//   }
+//   return 0;
 
-} // End outputChem
+// } // End outputChem

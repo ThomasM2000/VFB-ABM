@@ -132,8 +132,10 @@ public:
 
   float total_tnf() const { return total_tnf_; }
   float total_tgf() const { return total_tgf_; }
-  float total_il1beta() const { return total_il1beta_; }
-  float total_o2() const { return total_o2_; }
+  float total_fgf() const { return total_fgf_; }
+  float total_il6() const { return total_il6_; }
+  float total_il8() const { return total_il8_; }
+  float total_il10() const { return total_il10_; }
 
 private:
   void sync_diffusion_registry();
@@ -160,8 +162,10 @@ private:
 
   float total_tnf_ = 0.f;
   float total_tgf_ = 0.f;
-  float total_il1beta_ = 0.f;
-  float total_o2_ = 0.f;
+  float total_fgf_ = 0.f;
+  float total_il6_ = 0.f;
+  float total_il8_ = 0.f;
+  float total_il10_ = 0.f;
 };
 
 #endif

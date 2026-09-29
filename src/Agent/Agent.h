@@ -54,9 +54,7 @@ public:
   virtual ~Agent();
 
   enum agenttype_t {
-    stem,
-    progen,
-    np
+    fibroblast
   }; // Enumic type to keep track of the type of agent
 
   /*
@@ -95,6 +93,10 @@ public:
    * Parameters: void
    */
   int getIndex();
+
+  /** Euclidean distance in patches from the cell's seed position. */
+  float displacementFromSeed() const;
+
 
   /*
    * Description:	Rolls a hypothetical dice with 'percent' chance of
@@ -147,8 +149,8 @@ public:
   /** Local patch chemotaxis signal value. */
   float patchChemotaxis(int patch_index);
 
-  /** Move toward the neighbor with highest chemotaxis signal. */
-  bool moveTowardChemotaxis();
+  /** Move toward the neighbor with highest chemotaxis signal within `radius`. */
+  bool moveTowardChemotaxis(int radius = 1);
 
   /*
    * Description:	Determines the number of cells of type cellIndex from 27
@@ -225,6 +227,7 @@ public:
    */
   int life[2]; // Number of lives remaining at the beginning and end of each
                // tick
+  bool isActivated();
   bool activate[2]; // Whether agent is activated or not at the beginning and
                     // end of each tick
   int color[2];     // Agent's color at the beginning and end of each tick
@@ -265,6 +268,7 @@ protected:
                      // replacement/differentiation of cell)
   int doublings[2]; // Tracking of cell doublings (cells reach senescence, i.e.,
                     // non-proliferation, after ~100 doublings)
+  int ix0, iy0, iz0; // Seed position, for mean-displacement output
 };
 
 #endif /* AGENT_H */

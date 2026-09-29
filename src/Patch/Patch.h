@@ -177,8 +177,6 @@ class Patch {
      *                           (0: platelet, 1: chondrocytes, 2: macrophages,
      *                            3: neutrophils, 4: original collagen,
      *                            5: new collagen, 6: fragmented collagen
-     *                            7: original aggrecan, 8: new aggrecan, 
-     *                            9: fragmented aggrecan, 
      *                            10: original hyaluronan, 11: new hyaluronan,
      *                            12: fragmented hyaluronan)
      */
@@ -210,7 +208,6 @@ class Patch {
     bool inDamzone;   // Whether the patch is part of the damaged zone of tissue
     bool initHA;      // Whether the patch can be a center for sprouting original hyaluronan
     bool initcollagen;   // Whether the patch can be a center for sprouting original collagen
-    bool initaggrecan;    // Whether the patch can be a center for sprouting original aggrecan
 
     /*************************************************************************
      * VARIABLE ATTRIBUTES                                                   *
@@ -227,7 +224,7 @@ class Patch {
      *************************************************************************/
     /* Keeps track of the number of patches of each type. 
      *      Indexed according to the enumic values of patches_t 
-     *      (0: blood, 1:tissue, 2:epithelium, 3:capillary, 4:damage, 5:CaAlg)
+     *      (0: blood, 1:tissue, 2:epithelium, 3:capillary, 4:damage, 5:biomaterial)
      */
     #ifdef MODEL_SCAFFOLD
         static float numOfEachTypes[6];

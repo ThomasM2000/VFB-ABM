@@ -18,73 +18,40 @@
 
 using namespace std;
 int Cell::numOfCells = 0;
-float Cell::proliferation[Cell::PROLIFERATION_COUNT] = {};
-float Cell::cytokineSynthesis[Cell::CYTOKINE_SYNTHESIS_COUNT] = {};
 
-int Stem::numOfStem = 0;
-float Stem::migrationSpeed = 1; // patch/tick. Not an input parameter
-float Stem::OCR = 0;
-float Stem::apoptosisChance = 0;
-float Stem::collagenSynthRate = 1; // placeholder values which will be recalculated
-float Stem::aggrecanSynthRate = 0.5; // placeholder values which will be recalculated
+int Fibroblast::numOfFibroblast  = 0;
+int Fibroblast::numOfAFibroblast = 0;
 
-float Stem::CaAlgMigration[Stem::MIGRATION_COUNT] = {};
-float Stem::cytokineSynthesis[Stem::CYTOKINE_SYNTHESIS_COUNT] = {};
-float Stem::CollagenSynth[1] = {};
-float Stem::AggrecanSynth[1] = {};
-float Stem::proliferation[Stem::PROLIFERATION_COUNT] = {};
-float Stem::differentiation[Stem::DIFFERENTIATION_COUNT] = {};
+float Fibroblast::migration      [Fibroblast::MIGRATION_COUNT]       = {};
+float Fibroblast::viability      [Fibroblast::VIABILITY_COUNT]       = {};
+float Fibroblast::proliferation  [Fibroblast::PROLIFERATION_COUNT]   = {};
+float Fibroblast::tgfSynthesis   [Fibroblast::TGF_SYNTHESIS_COUNT]   = {};
+float Fibroblast::fgfSynthesis   [Fibroblast::FGF_SYNTHESIS_COUNT]   = {};
+float Fibroblast::tnfSynthesis   [Fibroblast::TNF_SYNTHESIS_COUNT]   = {};
+float Fibroblast::il6Synthesis   [Fibroblast::IL6_SYNTHESIS_COUNT]   = {};
+float Fibroblast::il8Synthesis   [Fibroblast::IL8_SYNTHESIS_COUNT]   = {};
+float Fibroblast::activation_params[Fibroblast::ACTIVATION_COUNT]    = {};
+float Fibroblast::collagenSynth  [Fibroblast::COLLAGEN_SYNTH_COUNT]  = {};
+float Fibroblast::elastinSynth   [Fibroblast::ELASTIN_SYNTH_COUNT]   = {};
+float Fibroblast::haSynth        [Fibroblast::HA_SYNTH_COUNT]        = {};
 
-int Progen::numOfProgen = 0; 
-float Progen::migrationSpeed = 1;    // patch/tick. Not an input parameter
-float Progen::OCR = 0;
-float Progen::apoptosisChance = 0;
-float Progen::aggrecanSynthRate = 1;
+static inline float safe_denominator(float d) { return (d > 1e-6f) ? d : 1e-6f; }
+static inline float safe_log10_arg(float a)   { return (a > 1.f) ? a : 1.f; }
+static inline double sim_days_at_least_one() {
+  double t = BMWorld::reportDay();
+  return (t >= 1.0) ? t : 1.0;  // ln(t) is undefined at t = 0
+}
 
-float Progen::CaAlgMigration[Progen::MIGRATION_COUNT] = {};
-float Progen::cytokineSynthesis[Progen::CYTOKINE_SYNTHESIS_COUNT] = {};
-float Progen::AggrecanSynth[1] = {};
-//float Progen::proliferation[1] = {24}; // values are the same as Cell/Stem; can just use the equivalent params defined in Stem
-//float Progen::differentiation[3] = {0.7, 0.3, 48}; // values are the same as Stem; can just use the equivalent params defined in Stem
-
-int NP::numOfNP = 0;
-float NP::migrationSpeed = 1;    // patch/tick. Not an input parameter
-float NP::OCR = 0;
-float NP::apoptosisChance = 0;
-float NP::collagenSynthRate = 1;
-float NP::aggrecanSynthRate = 1.5;
-
-float NP::CaAlgMigration[NP::MIGRATION_COUNT] = {};
-float NP::CollagenSynth[NP::COLLAGEN_SYNTH_COUNT] = {};
-float NP::AggrecanSynth[NP::AGGRECAN_SYNTH_COUNT] = {};
 
 //DEFAULT CONSTRUCTORS
 Cell::Cell() {
 	cout << "default cell alloc" << endl;
-
-	// added for debugging: print out what cell type
-	//if (typeid(*this) == typeid(stem)) {
-	//	cout << "cell type stem";
-	//}
-	//else if (typeid(*this) == typeid(progen)) {
-	//	cout << "cell type progen";
-	//}
-	//else if (typeid(*this) == typeid(np)) {
-	//	cout << "cell type np";
-	//}
 }
 
-Stem::Stem() {
-	cout << "default stem alloc" << endl;
+Fibroblast::Fibroblast() {
+	cout << "default fibroblast alloc" << endl;
 }
 
-Progen::Progen() {
-	cout << "default pre-np alloc" << endl;
-}
-
-NP::NP() {
-	cout << "default np alloc" << endl;
-}
 
 
 //CONSTRUCTORS FOR PATCH POINTERS
@@ -93,6 +60,9 @@ Cell::Cell(Patch* patchPtr) {
 	this->iy[write_t] = patchPtr->indice[1];
 	this->iz[write_t] = patchPtr->indice[2];
 	this->index[write_t] = patchPtr->index;
+	this->ix0 = patchPtr->indice[0];
+	this->iy0 = patchPtr->indice[1];
+	this->iz0 = patchPtr->indice[2];
 	this->alive[write_t] = true;
 	this->realDeath[write_t] = false;
 	this->doublings[write_t] = 0;
@@ -124,50 +94,19 @@ Cell::Cell(Patch* patchPtr) {
 	//this->type[read_t] = cell;
 }
 
-Stem::Stem(Patch* patchPtr) : Cell(patchPtr) {
+Fibroblast::Fibroblast(Patch* patchPtr) : Cell(patchPtr) {
 	this->alive[write_t] = true;
 	this->realDeath[write_t] = false;
 	this->doublings[write_t] = 0;
-	this->color[write_t] = cstem;
-	this->type[write_t] = stem;
+	this->color[write_t] = cfibroblast;
+	this->type[write_t] = fibroblast;
 
 	this->doublings[read_t] = 0;
-	this->color[read_t] = cstem;
-	this->type[read_t] = stem;
+	this->color[read_t] = cfibroblast;
+	this->type[read_t] = fibroblast;
 }
 
-Progen::Progen(Patch* patchPtr) : Cell(patchPtr) {
-	this->alive[write_t] = true;
-	this->realDeath[write_t] = false;
-	this->doublings[write_t] = 0;
-	this->color[write_t] = cprogen;
-	this->type[write_t] = progen;
 
-	this->doublings[read_t] = 0;
-	this->color[read_t] = cprogen;
-	this->type[read_t] = progen;
-}
-
-NP::NP(Patch* patchPtr) : Cell(patchPtr) {
-	this->alive[write_t] = true;
-	this->realDeath[write_t] = false;
-	this->doublings[write_t] = 0;
-	this->color[write_t] = cnp;
-	this->type[write_t] = np;
-
-	this->doublings[read_t] = 0;
-	this->color[read_t] = cnp;
-	this->type[read_t] = np;
-
-	#ifndef MODEL_SCAFFOLD
-		// Unactivated chondrocytes live for 5 to 11 days. 0 corresponds to hours:
-		if (Agent::agentWorldPtr->clock == 0) this->life[write_t] = BMWorld::reportTick(0, rand() % 12);
-		else this->life[write_t] = BMWorld::reportTick(0, 5 + rand() % 7);
-	#else
-		//this->life[write_t] = BMWorld::reportTick(0, 5 + rand() % 7);
-	this->life[write_t] = 0;
-	#endif
-}
 
 //CONSTRUCTORS WITH COORDINATES
 Cell::Cell(int x, int y, int z) {
@@ -175,17 +114,13 @@ Cell::Cell(int x, int y, int z) {
 	this->iy[write_t] = y;
 	this->iz[write_t] = z;
 	this->index[write_t] = x + y*nx + z*nx*ny;
+	this->ix0 = x;
+	this->iy0 = y;
+	this->iz0 = z;
 	this->alive[write_t] = true;
 	this->realDeath[write_t] = false;
 	this->doublings[write_t] = 0;
 
-	//#ifndef MODEL_SCAFFOLD
-	//	// Unactivated chondrocytes live for 5 to 11 days. 0 corresponds to hours.
-	//	if (Agent::agentWorldPtr->clock == 0) this->life[write_t] = BMWorld::reportTick(0, rand()%12);
-	//	else this->life[write_t] = BMWorld::reportTick(0, 5 + rand()%7);
-	//#else
-	//	this->life[write_t] = BMWorld::reportTick(0, 5 + rand()%7);
-	//#endif
 
 	this->life[write_t] = 0;
 
@@ -221,132 +156,169 @@ Cell::Cell(int x, int y, int z) {
 		this->type[read_t] = cell;
 		this->doublings[write_t] = 0;
 	#endif
-	///* Added by MM to check types of cell stages and add to respective counters: */
-	//if (typeid(*this) == typeid(Stem)) {
-	//	Stem::numOfStem++;
-	//}
-	//else if (typeid(*this) == typeid(Progen)) {
-	//	Progen::numOfProgen++;
-	//}
-	//else if (typeid(*this) == typeid(NP)) {
-	//	NP::numOfNP++;
-	//}
-	//Cell::numOfCells++;  
 }
 
-Stem::Stem(int x, int y, int z) : Cell(x, y, z) {}
-
-Progen::Progen(int x, int y, int z) : Cell(x, y, z) {}
-
-NP::NP(int x, int y, int z) : Cell(x, y, z) {}
+Fibroblast::Fibroblast(int x, int y, int z) : Cell(x, y, z) {}
 
 //DESTRUCTORS
 Cell::~Cell() {}
 
-Stem::~Stem() {}
+Fibroblast::~Fibroblast() {}
 
-Progen::~Progen() {}
+/* -------------------------------------------------------------------------- */
+/*                            ECM DEPOSITION HELPERS                          */
+/* -------------------------------------------------------------------------- */
+namespace {
+	/** Pick a random in-bounds Moore neighbour of the agent, or -1. */
+	int random_neighbour_index(int x, int y, int z, unsigned *seed) {
+	  vector<int> neighbours;
+	  for (int i = 0; i < 27; i++) {
+		int dx = Agent::dX[i], dy = Agent::dY[i], dz = Agent::dZ[i];
+		if (x + dx < 0 || x + dx >= Agent::nx) continue;
+		if (y + dy < 0 || y + dy >= Agent::ny) continue;
+		if (z + dz < 0 || z + dz >= Agent::nz) continue;
+		neighbours.push_back((x + dx) + (y + dy) * Agent::nx +
+							 (z + dz) * Agent::nx * Agent::ny);
+	  }
+	  if (neighbours.empty()) return -1;
+	  return neighbours[rand_r(seed) % neighbours.size()];
+	}
+}  // namespace
 
-NP::~NP() {}
+void Cell::depositCollagen(float amount) {
+	if (amount <= 0) return;
+	int tid = 0;
+#ifdef _OMP
+	tid = omp_get_thread_num();
+#endif
+	int in = random_neighbour_index(this->ix[read_t], this->iy[read_t],
+									this->iz[read_t],
+									&(Agent::agentWorldPtr->seeds[tid]));
+	if (in < 0) return;
+	Agent::agentECMPtr[in].ncollagen[write_t] =
+		Agent::agentECMPtr[in].ncollagen[read_t] + static_cast<float>(amount);
+#ifdef OPT_ECM
+	Agent::agentECMPtr[in].set_dirty();
+#endif
+}
+
+void Cell::depositElastin(float amount) {
+	if (amount <= 0) return;
+	int tid = 0;
+#ifdef _OMP
+	tid = omp_get_thread_num();
+#endif
+	int in = random_neighbour_index(this->ix[read_t], this->iy[read_t],
+									this->iz[read_t],
+									&(Agent::agentWorldPtr->seeds[tid]));
+	if (in < 0) return;
+	Agent::agentECMPtr[in].nelastin[write_t] =
+		Agent::agentECMPtr[in].nelastin[read_t] + static_cast<float>(amount);
+#ifdef OPT_ECM
+	Agent::agentECMPtr[in].set_dirty();
+#endif
+}
+
+void Cell::depositHA(float amount, int here) {
+	if (amount <= 0) return;
+	int in;
+	if (here) {
+	in = isModified(this->index) ? this->index[write_t] : this->index[read_t];
+	} else {
+	int tid = 0;
+#ifdef _OMP
+	tid = omp_get_thread_num();
+#endif
+	in = random_neighbour_index(this->ix[read_t], this->iy[read_t],
+								this->iz[read_t],
+								&(Agent::agentWorldPtr->seeds[tid]));
+	}
+	if (in < 0) return;
+	Agent::agentECMPtr[in].HA[write_t] =
+		Agent::agentECMPtr[in].HA[read_t] + static_cast<float>(amount);
+#ifdef OPT_ECM
+	Agent::agentECMPtr[in].set_dirty();
+#endif
+}
 
 //CELL FUNCTIONS
-void Cell::cellFunction() {
-	// Calls the individual cell stage functions
+/* Table 3, rules 9 and 10. */
+void Cell::activation() {
 	int in = this->index[read_t];
+	float patchTGF = this->patchChemConcentration(TGF, in);
 
-	//Measure mean & patch oxygen 
-	float meanO2 = this->meanNeighborConcentration(o2);
-	float patchO2 = this->patchChemConcentration(o2, in);
-
-	if (this->alive[read_t] == false) return;
-	if (this->alive[read_t] == true && (meanO2 + patchO2) > this->get_OCR()) {
-		this->proliferate();
-		this->differentiate();
-		this->cellSniff();
-		this->ecm_synthesis();
-		this->cytokine_synthesis();
-		this->apoptose();
-
-		// Finally, subtract 'consumed' O2 from current and neighbor patches
-
-		// Location of agent in x,y,z dimensions of world.
-		int x = this->ix[read_t];
-		int y = this->iy[read_t];
-		int z = this->iz[read_t];
-
-		// Number of patches in x,y,z dimensions of world
-		int nx = Agent::nx;
-		int ny = Agent::ny;
-		int nz = Agent::nz;
-
-		float oxDecrease = this->get_OCR()/ 27; // divide OCR across 27 patches (current + neighbors)
-		this->addPatchChemSecretion(o2, in, -1 * oxDecrease);
-		// Count number of patches of neighbors inside world dimensions:
-		for (int dZ = -1; dZ <= 1; dZ++) {
-			for (int dY = -1; dY <= 1; dY++) {
-				for (int dX = -1; dX <= 1; dX++) {
-					if (x + dX < 0 || x + dX >= nx || y + dY < 0 || y + dY >= ny || z + dZ < 0 || z + dZ >= nz) continue;
-					int in = (x + dX) + (y + dY) * nx + (z + dZ) * nx * ny;
-					if (Agent::agentPatchPtr[in].type[read_t] == CaAlg) (this->addPatchChemSecretion(o2, in, -1 * oxDecrease));
-				}
-			}
+	if (this->activate[read_t] == false) {
+		if (this->should_activate(patchTGF)) {
+			this->activate[write_t] = true;
+			this->type[write_t] = afibroblast;
+			this->color[write_t] = cafibroblast;
+			Agent::agentPatchPtr[in].occupiedby[write_t] = afibroblast;
+			Agent::agentPatchPtr[in].dirty = true;
+			Fibroblast::numOfFibroblast--;
+			Fibroblast::numOfAFibroblast++;
 		}
-
-		// last thing to do: increase age + 1 tick 
-		if (this->life[read_t] >= 0) {
-			this->life[write_t] = this->life[read_t] + 1;
+	} else {
+		if (this->should_deactivate()) {
+			this->activate[write_t] = false;
+			this->type[write_t] = fibroblast;
+			this->color[write_t] = cfibroblast;
+			Agent::agentPatchPtr[in].occupiedby[write_t] = fibroblast;
+			Agent::agentPatchPtr[in].dirty = true;
+			Fibroblast::numOfAFibroblast--;
+			Fibroblast::numOfFibroblast++;
 		}
 	}
 }
 
-void Cell::cellSniff() {
+void Cell::cytokine_synthesis() {
+	this->create_cytokines();
+}
+
+/* Table 3, rules 11-13. Each hook owns its own synthesis interval. */
+void Cell::ecm_synthesis() {
 	int in = this->index[read_t];
+	if (Agent::agentPatchPtr[in].type[read_t] != biomaterial) return;
+  
+	this->create_collagen();
+	this->create_elastin();
+	this->create_ha();
+}
 
-	// gets migration speed from correct hook function
-	float speed = get_migration_speed();
 
-	if ((Agent::agentPatchPtr[in]).inDamzone == true) {
-		if (rollDice(80) && this->moveTowardChemotaxis() == true){
-			#ifdef MODEL_SCAFFOLD
-			if (speed > 1 && Agent::agentPatchPtr[in].type[read_t] == CaAlg) {
-				// Move up to "migrationSpeed" patches per tick:
-				for (int dx = 0; dx < speed; dx++) this->wiggle();
-			}
-		// If cell is not actively migrating, consider chance of moving to next patch:
-		} else if(rollDice(0.25)){		
-			this->wiggle(); 
-		}
-		#else
-			this->wiggle();
-		#endif
+void Cell::cellFunction() {
+	if (this->alive[read_t] == false) return;
 
-	} else {
-		// not in damage zone
-#ifdef MODEL_SCAFFOLD
-		if (speed > 1 && Agent::agentPatchPtr[in].type[read_t] == CaAlg) {
-			for (int dx = 0; dx < speed; dx++) this->wiggle();
-		}
-		else if (rollDice(0.25)) {
-			this->wiggle();
-		}
-#else
-		this->wiggle();
-#endif
+	/* 1. Activation / deactivation  (Table 3, rules 9-10) */
+	this->activation();
+
+	/* 2. Migration  (Table 3, rule 1) */
+	this->cellSniff();
+
+	/* 3. Proliferation  (Table 3, rule 3) */
+	this->proliferate();
+
+	/* 4-5. Only activated fibroblasts secrete (Figure 1C) */
+	if (this->activate[write_t]) {
+		this->cytokine_synthesis();  // Table 3, rules 4-8
+		this->ecm_synthesis();       // Table 3, rules 11-13
 	}
 
-	// TGF can excite NP cell and overcome gradient: //NOTE MM: double check this for MSCs
-	if (can_tgf_excite()) {
-#ifdef MODEL_SCAFFOLD
-		if (speed > 1 && Agent::agentPatchPtr[in].type[read_t] == CaAlg) {
-			for (int dx = 0; dx < speed; dx++) this->wiggle(); // Move up to "migrationSpeed" patches per tick:
-		}
-		else if (rollDice(0.25)) {
-			this->wiggle(); // If cell is not actively migrating, consider chance of moving to next patch: 	
-		}
-#else
-		this->wiggle();
-#endif
-	}
+	/* 6. Death driven by the viability rate  (Table 3, rule 2) */
+	this->apoptose();
+
+	/* Advance the internal clock by one tick. */
+	if (this->life[read_t] >= 0)
+		this->life[write_t] = this->life[read_t] + 1;
+}
+
+void Cell::cellSniff() {
+	int speed = static_cast<int>(this->get_migration_speed());
+	if (speed < 1) return;                 // slower than one patch this tick
+  
+	if (this->moveTowardChemotaxis(speed)) return;
+  
+	for (int step = 0; step < speed; step++)
+	  	this->wiggle();
 }
 
 void Cell::die() {
@@ -354,23 +326,24 @@ void Cell::die() {
 	Agent::agentPatchPtr[in].clearOccupied();
 	Agent::agentPatchPtr[in].occupiedby[write_t] = nothing;
 	this->alive[write_t] = false;
-	this->life[write_t] = 0;
+	this->life[write_t] = -1;
 }
 
+/* Table 3, rule 2: vr = k3 ln(t) + k4 is a *survival* percentage. */
 void Cell::apoptose() {
-#ifdef CALIBRATION
-	if (rollDice(get_apoptosis_chance())) {
-		this->realDeath[write_t] = true;
-		this->die();
-		return;
+	if (fmod(BMWorld::reportHour(), 24.0) != 0) return;
+	if (BMWorld::reportHour() == 0) return;
+  
+	float vr = this->get_viability_rate();
+	float death_chance = 100.f - vr;
+	if (death_chance <= 0.f) return;
+	if (death_chance > 100.f) death_chance = 100.f;
+  
+	if (Agent::rollDice(death_chance)) {
+	  this->realDeath[write_t] = true;
+	  this->die();
 	}
-#else
-	if (rollDice(1)) { // from Netlogo model
-		this->die();
-		return;
-	}
-#endif
-}
+  }
 
 void Cell::copyAndInitialize(Agent* original, int dx, int dy, int dz) {
 	int in = this->index[read_t];
@@ -406,716 +379,357 @@ void Cell::copyAndInitialize(Agent* original, int dx, int dy, int dz) {
 	}
 }
 
+int Cell::get_max_doublings() { return 100; }   // ihVFF, passage 6-10
+
 void Cell::proliferate() {
 	int in = this->index[read_t];
-	if (!(Agent::agentPatchPtr[in].type[read_t] == CaAlg)) return; // check for being on a biomaterial patch
-	if (!(this->life[read_t] > 0 && this->life[read_t] % static_cast<int>(Cell::proliferation[Cell::PROLIFERATION_HOURS_BETWEEN]) == 0)) return; // check for 24-hour mark (of the cell's life) to try division
-	if (!isProliferative()) return; // check if cell is proliferative; i.e., under the max # of divisions for its type
+	if (Agent::agentPatchPtr[in].type[read_t] != biomaterial) return;
+  
+	const float hours_between = Fibroblast::proliferation[Fibroblast::PROLIFERATION_HOURS_BETWEEN]; // k6
+	if (hours_between <= 0) return;
+	if (fmod(BMWorld::reportHour(), hours_between) != 0) return;
+	if (BMWorld::reportHour() == 0) return;  // no division on the seeding tick
 
-	// calculating local cytokines
-	float meanTNF = this->meanNeighborConcentration(TNF);
-	float meanTGF = this->meanNeighborConcentration(TGF);
-	float meanIL1 = this->meanNeighborConcentration(IL1beta);
+	if (this->doublings[read_t] >= this->get_max_doublings()) return;
 
-	float prob = get_prolif_prob(meanTGF, meanIL1, meanTNF); // get the proliferation probability for the cell type
-
-	if (rollDice(prob)) {
-		this->hatchnewcell(1, this->type[read_t]);
-		this->doublings[write_t] = this->doublings[read_t] + 1;
-		return;
+	float prob = this->get_prolif_prob();
+	if (prob <= 0) return;
+  
+	if (Agent::rollDice(prob)) {
+	  this->hatchnewcell(1, this->type[read_t]);
+	  this->doublings[write_t] = this->doublings[read_t] + 1;
 	}
 }
 
-void Cell::differentiate() {
-	int in = this->index[read_t];
-	if (!(Agent::agentPatchPtr[in].type[read_t] == CaAlg)) return; // check for being on a biomaterial patch
-	if (!(this->life[read_t] > 0 && this->life[read_t] % static_cast<int>(Stem::differentiation[Stem::DIFFERENTIATION_HOURS_BETWEEN_ATTEMPTS]) == 0)) return; // check for 48-hour mark (of the cell's life) to try differentiation
-	if (!isProliferative()) return;
+float Cell::get_migration_speed()          { return 0; }
+float Cell::get_viability_rate()           { return 100; }
+float Cell::get_prolif_prob()              { return 0; }
+bool  Cell::should_activate(float)         { return false; }
+bool  Cell::should_deactivate()            { return false; }
+void  Cell::create_cytokines()             {}
+void  Cell::create_collagen()              {}
+void  Cell::create_elastin()               {}
+void  Cell::create_ha()                    {}
 
-	// calculating local cytokines
-	float meanTNF = this->meanNeighborConcentration(TNF);
-	float meanTGF = this->meanNeighborConcentration(TGF);
-	float meanIL1 = this->meanNeighborConcentration(IL1beta);
-
-	float prob = get_diff_prob(meanTGF, meanIL1, meanTNF);
-	int daughterType = get_daughter_type();
-	if (daughterType == -1) return; // base Cell has no daughter type; skip 
-
-	if (rollDice(prob)) {
-		if (rollDice(Stem::differentiation[Stem::DIFFERENTIATION_ASYMMETRIC_PROBABILITY]*100)) { // check for asymmetric differentiation; more likely
-			this->hatchnewcell(1, daughterType);
-		}
-		else { // check for symmetric differentiation; less likely
-			Agent::agentPatchPtr[in].clearOccupied();
-			Agent::agentPatchPtr[in].occupiedby[write_t] = nothing;
-
-			this->hatchnewcell(1, daughterType, 1); // 'change' cell here to next cell stage
-			this->doublings[write_t] = this->doublings[read_t] + 1;
-			this->hatchnewcell(1, daughterType); // create new cell in next stage nearby
-			this->die(); // 'kill' current cell
-		}
-	}
-}
-
-void Cell::ecm_synthesis() {
-	int in = this->index[read_t];
-
-	// Calculates chemical gradients and patch chemical concentrations:
-	float meanTNF = this->meanNeighborConcentration(TNF);
-	float meanTGF = this->meanNeighborConcentration(TGF);
-	float meanIL1 = this->meanNeighborConcentration(IL1beta);
-	float patchTNF = this->patchChemConcentration(TNF, in);
-	float patchTGF = this->patchChemConcentration(TGF, in);
-	float patchIL1beta = this->patchChemConcentration(IL1beta, in);
-
-	// Location of agent in x,y,z dimensions of world.
-	int x = this->ix[read_t];
-	int y = this->iy[read_t];
-	int z = this->iz[read_t];
-
-	// Number of patches in x,y,z dimensions of world
-	int nx = Agent::nx;
-	int ny = Agent::ny;
-	int nz = Agent::nz;
-
-	int neighborCount = 0;
-	// Count number of patches of neighbors inside world dimensions:
-	for (int dZ = -1; dZ <= 1; dZ++) {
-		for (int dY = -1; dY <= 1; dY++) {
-			for (int dX = -1; dX <= 1; dX++) {
-				if (x + dX < 0 || x + dX >= nx || y + dY < 0 || y + dY >= ny || z + dZ < 0 || z + dZ >= nz) continue;
-				int in = (x + dX) + (y + dY) * nx + (z + dZ) * nx * ny;
-				if (Agent::agentPatchPtr[in].type[read_t] == CaAlg) neighborCount++;
-			}
-		}
-	}
-
-	// Calculate total volume of surrounding patches to check for cytokine thresholds
-	float patchVolume = BMWorld::totalVolumeML / (nx * ny * nz);
-	//int neighbors = BMWorld::countNeighborPatchType(x, y, z, CaAlg);
-	float patchesVolume = patchVolume * neighborCount;
-
-	calculate_ecm_synth_rates(meanTGF, meanIL1, meanTNF, patchesVolume);
-
-	if (fmod(((Agent::agentWorldPtr)->reportHour()), 12) == 0) {
-		create_ecm(meanTGF, meanIL1, meanTNF);
-	}
-}
-
-void Cell::cytokine_synthesis() {
-	int in = this->index[read_t];
-
-	// Calculates patch chemical concentrations:
-	float patchTNF = this->patchChemConcentration(TNF, in);
-	float patchTGF = this->patchChemConcentration(TGF, in);
-	float patchIL1beta = this->patchChemConcentration(IL1beta, in);
-
-	create_cytokines(patchTGF, patchIL1beta, patchTNF);
-}
-
-void Cell::calculate_ecm_synth_rates(float meanTGF, float meanIL1, float meanTNF, float patchesVolume) {}
-
-void Cell::create_ecm(float meanTGF, float meanIL1, float meanTNF) {}
-
-void Cell::makeOCollagen(float meanTGF, float meanIL1) {
-	int read_index;
-
-	// Check if the location has been modified in this tick
-	if (isModified(this->index)) {
-		read_index = write_t;  // If it has, work off of the intermediate value
-	}
-	else {
-		read_index = read_t;  // If it has NOT, work off of the original value
-	}
-
-	int dx, dy, dz;
-
-	// Location of cell in x,y,z dimensions of world.
-	int x = this->ix[read_index];
-	int y = this->iy[read_index];
-	int z = this->iz[read_index];
-
-	// Number of patches in x,y,z dimensions of world
-	int nx = Agent::nx;
-	int ny = Agent::ny;
-	int nz = Agent::nz;
-	int randInt, target, in;
-	vector <int> neighbors;
-	//vector <int> damagedneighbors;
-
-	// Make a list of neighboring patches
-#ifndef MODEL_3D
-	for (int i = 9; i < 18; i++) {
-#else
-	for (int i = 0; i < 27; i++) {
-#endif
-		dx = Agent::dX[i];
-		dy = Agent::dY[i];
-		dz = Agent::dZ[i];
-		in = (x + dx) + (y + dy) * nx + (z + dz) * nx * ny;
-
-		// Try a new neighboring patch if this one is outside the world dimensions:
-		if (x + dx < 0 || x + dx >= nx || y + dy < 0 || y + dy >= ny || z + dz < 0 || z + dz >= nz) continue;
-
-		// Add the valid neighboring patch to the list:
-		neighbors.push_back(i);
-	}
-
-	// Target a random damaged neighboring patch, if there are any.
-	if (neighbors.size() > 0) {
-		int tid = 0;
-#ifdef _OMP
-		tid = omp_get_thread_num();     // Get thread id in order to access the seed that belongs to this thread
-#endif
-
-		randInt = rand_r(&(agentWorldPtr->seeds[tid])) % neighbors.size();
-		target = neighbors[randInt];
-		dx = Agent::dX[target];
-		dy = Agent::dY[target];
-		dz = Agent::dZ[target];
-
-		// Move to new patch and sprout ocollagen
-		in = (x + dx) + (y + dy) * nx + (z + dz) * nx * ny;
-		this->move(dx, dy, dz, read_index);
-
-		Agent::agentECMPtr[in].ocollagen[write_t] = Agent::agentECMPtr[in].ocollagen[read_t] + 1 + rand() % 2;
-#ifdef OPT_ECM
-		Agent::agentECMPtr[in].set_dirty();
-#endif
-	}
-}
-
-void Cell::makeOAggrecan(float meanTNF, float meanTGF, float meanIL1) {
-	int read_index;
-	// Check if the location has been modified in this tick:
-	if (isModified(this->index)) {
-		read_index = write_t;		// If it has, work off of the intermediate value
-	} else {
-		read_index = read_t;		// If it has NOT, work off of the original value
-	}
-
-	int dx, dy, dz;
-
-  	// Location of cell in x,y,z dimensions of world.
-	int x = this->ix[read_index];
-	int y = this->iy[read_index];
-	int z = this->iz[read_index];
-
-  	// Number of patches in x,y,z dimensions of world
-	int nx = Agent::nx;
-	int ny = Agent::ny;
-	int nz = Agent::nz;
-	int randInt, target, in;
-	vector <int> neighbors;
-
-	// Make a list of neighboring patches
-	#ifndef MODEL_3D
-	for (int i = 9; i < 18; i++) {
-	#else
-	for (int i = 0; i < 27; i++) {
-	#endif
-		dx = Agent::dX[i];
-		dy = Agent::dY[i];
-		dz = Agent::dZ[i];
-		in = (x + dx) + (y + dy) * nx + (z + dz) * nx * ny;
-
-		// Try a new neighboring patch if this one is outside the world dimensions:
-		if (x + dx < 0 || x + dx >= nx || y + dy < 0 || y + dy >= ny || z + dz < 0 || z + dz >= nz) continue;
-
-		// Add the valid neighboring patch to the list:
-		neighbors.push_back(i);
-	}
-	
-	// Target a random neighboring patch, if there are any.
-	if (neighbors.size() > 0) {
-		int tid = 0;
-#ifdef _OMP
-		tid = omp_get_thread_num();     // Get thread id in order to access the seed that belongs to this thread
-#endif
-
-		randInt = rand_r(&(agentWorldPtr->seeds[tid])) % neighbors.size();
-		target = neighbors[randInt];
-		dx = Agent::dX[target];
-		dy = Agent::dY[target];
-		dz = Agent::dZ[target];
-
-		// Move to new patch and sprout oaggrecan
-		in = (x + dx) + (y + dy) * nx + (z + dz) * nx * ny;
-		this->move(dx, dy, dz, read_index);
-
-		Agent::agentECMPtr[in].oaggrecan[write_t] = Agent::agentECMPtr[in].oaggrecan[read_t] + 1 + rand() % 2;
-#ifdef OPT_ECM
-		Agent::agentECMPtr[in].set_dirty();
-#endif
-	}
-}
-
-void Cell::create_cytokines(float patchTGF, float patchIL1beta, float patchTNF) {}
-
-bool Cell::isProliferative() {
-	return this->doublings[read_t] < get_max_doublings();
-}
-
-int Cell::get_max_doublings() { return 50; } //base default
-
-float Cell::get_prolif_prob(float meanTGF,
-	float meanIL1,
-	float meanTNF) { return 10; } //base default
-
-int Cell::get_daughter_type() { return -1; } // sentinel 'no type'
-
-float Cell::get_diff_prob(float meanTGF,
-	float meanIL1,
-	float meanTNF) { return 5; } // base default
-
-float Cell::get_migration_speed() { return 0; }
-
-float Cell::get_apoptosis_chance() { return 1; }
-
-float Cell::get_OCR() { return 0; }
 
 void Cell::hatchnewcell(int number, int agentType, int here) {
 	int newcells = 0;
-	int lx = 0;
-	int ly = 0;
-	int lz = 0;
-	int in = 0;
+	const int x = this->ix[read_t];
+	const int y = this->iy[read_t];
+	const int z = this->iz[read_t];
+	const int nx = Agent::nx, ny = Agent::ny, nz = Agent::nz;
 
-	// Location of cell in x,y,z dimensions of the world
-	int x = this->ix[read_t];
-	int y = this->iy[read_t];
-	int z = this->iz[read_t];
-
-	// Number of patches in x,y,z dimensions of world
-	int nx = Agent::nx;
-	int ny = Agent::ny;
-	int nz = Agent::nz;
-
-	// Shuffle neighboring patches and go through them in a random order:
 #ifdef MODEL_3D
-	random_shuffle(&Agent::neighbor[0], &Agent::neighbor[26]);
-	for (int i = 0; i < 27 && newcells < number; i++) {
+	random_shuffle(&Agent::neighbor[0], &Agent::neighbor[27]);
+	const int nNeighbors = 27;
 #else
-	random_shuffle(&Agent::neighbor[0], &Agent::neighbor[7]);
-	for (int i = 0; i < 8 && newcells < number; i++) {
+	random_shuffle(&Agent::neighbor[0], &Agent::neighbor[8]);
+	const int nNeighbors = 8;
 #endif
-		if (here == 0) { // Default option; hatching on number of neighboring patches
-			// Distance away from target neighboring patch in x,y,z dimensions
-			int dx = Agent::dX[neighbor[i]];
-			int dy = Agent::dY[neighbor[i]];
-			int dz = Agent::dZ[neighbor[i]];
 
-			// Patch row major index of target neighboring patch:
-			in = (x + dx) + (y + dy) * nx + (z + dz) * nx * ny;
+	for (int i = 0; i < nNeighbors && newcells < number; i++) {
+		int lx, ly, lz, in;
 
-			// Hatching coordinates:
-			int lx = x + dx;
-			int ly = y + dy;
-			int lz = z + dz;
-
-			// Try a new target neighboring patch if this one is not inside the world dimensions, or is occupied.
-			if (x + dx < 0 || x + dx >= nx || y + dy < 0 || y + dy >= ny || z + dz < 0 || z + dz >= nz) continue;
-			int targetType = agentPatchPtr[in].type[read_t];
-		}
-		else { // here == 1; option to hatch a new cell on current patch
+		if (here == 0) {
+			const int dx = Agent::dX[Agent::neighbor[i]];
+			const int dy = Agent::dY[Agent::neighbor[i]];
+			const int dz = Agent::dZ[Agent::neighbor[i]];
+			lx = x + dx; ly = y + dy; lz = z + dz;
+			if (lx < 0 || lx >= nx || ly < 0 || ly >= ny || lz < 0 || lz >= nz) continue;
+			in = lx + ly * nx + lz * nx * ny;
+			/* Only divide into an unoccupied biomaterial patch. */
+			if (Agent::agentPatchPtr[in].type[read_t] != biomaterial) continue;
+			if (Agent::agentPatchPtr[in].isOccupied()) continue;
+		} else {
+			lx = x; ly = y; lz = z;
 			in = this->getIndex();
-
-			// Hatching coordinates:
-			int lx = x;
-			int ly = y;
-			int lz = z;
 		}
-		// Create a new cell of agentType at the valid target neighboring patch:
-		Cell* newcell = nullptr;
+
+		Cell *newcell = nullptr;
 		switch (agentType) {
-		case stem:
-		{
-			newcell = new Stem(lx, ly, lz);
+		  case fibroblast:
+		  case afibroblast:
+			newcell = new Fibroblast(lx, ly, lz);
+			break;
+		  default:
+			continue;
 		}
-		break;
-		case progen:
-		{
-			newcell = new Progen(lx, ly, lz);
-		}
-		break;
-		case np:
-		{
-			newcell = new NP(lx, ly, lz);
-		}
-		break;
-		}
-		newcells++;
+		if (!newcell) continue;
 
-		// Update target neighboring patch as occupied:
 		Agent::agentPatchPtr[in].setOccupied();
-		Agent::agentPatchPtr[in].occupiedby[write_t] = agentType;
+		Agent::agentPatchPtr[in].occupiedby[write_t] = fibroblast;
+		Agent::agentPatchPtr[in].dirty = true;
 
-		/* If executing OMP version, add the pointer to this new cell to the thread-local list first.
-	* BMWorld::UpdateCells() will take care of putting it in the global list at the end
-	*/
 #ifdef _OMP
-		int tid = omp_get_thread_num();
-		Agent::agentWorldPtr->localNewCells[tid]->push_back(newcell);
+		Agent::agentWorldPtr->localNewCells[omp_get_thread_num()]->push_back(newcell);
 #else
-	// If executing serial version, add the pointer to this new cell to the global list right away
 		Agent::agentWorldPtr->cells.addData(newcell, DEFAULT_TID);
 #endif
-		newcell->wiggle();
+		newcells++;
 	}
 }
 
 /* -------------------------------------------------------------------------- */
-/*                                    STEM                                    */
+/*                                    FIBROBLAST                                    */
 /* -------------------------------------------------------------------------- */
 
-int Stem::get_max_doublings() { return 100; }
 
-float Stem::get_prolif_prob(float meanTGF,
-	float meanIL1,
-	float meanTNF) {
+// Table 3, rule 1:  v = -k1 ln(E) + k2   [um/min] -> patches/tick.
+float Fibroblast::get_migration_speed() {
+	float E = BMWorld::E;                       // elastic modulus in Pa
+	if (E <= 1.f) E = 1.f;                      // ln(E) domain guard
 
-	int TGFrelated = 0;
+	float v_um_per_min = -Fibroblast::migration[MIGRATION_ELASTICITY_EFFECT] * log(E)
+                       + Fibroblast::migration[MIGRATION_BASELINE_SPEED];
+	if (v_um_per_min < 0.f) v_um_per_min = 0.f;
 
-#ifdef CALIBRATION
-	if (meanTGF <= Stem::proliferation[Stem::PROLIFERATION_TGF_THRESHOLD]) {
-#else  
-	if (meanTGF <= 10) {
-#endif
-		TGFrelated = 1;  // Low TGF (0.1-1ng) stimulate proliferation and attraction. 
+	const double tick_min = Agent::agentWorldPtr->tick_interval_minutes();
+	const double patch_um = Agent::agentWorldPtr->patchlength * 1000.0; // mm -> um
+	const float patches = static_cast<float>(v_um_per_min * tick_min / patch_um);
+
+  /* Sub-patch speeds are realised stochastically so that, on average, the cell
+   * covers `patches` patches per tick. The value is per-agent, so it is not
+   * cached in a shared static (which would race under OpenMP). */
+	return Agent::rollDice((patches - floor(patches)) * 100.f) ? ceil(patches)
+                                                             : floor(patches);
+}
+
+/* Table 3, rule 2:  vr = k3 ln(t) + k4  [% surviving]. */
+float Fibroblast::get_viability_rate() {
+	const double t = sim_days_at_least_one();
+	return Fibroblast::viability[VIABILITY_TIME_EFFECT] * static_cast<float>(log(t))
+		   + Fibroblast::viability[VIABILITY_BIOMATERIAL_EFFECT];
+}
+
+/*
+ * Table 3, rule 3:
+ *   x        = -1 if TGF > k5 else +1
+ *   Every k6 hours,
+ *   Prolif_b = (k7 - k8 HAww) log(t) + k9 HAww - k10
+ *   Prolif   = Prolif_b ( k11 + (HAf + k12 log10(1+TNF+xTGF+FGF+HAf) + k13)/k14 )
+ */
+float Fibroblast::get_prolif_prob() {
+	const int in = this->index[read_t];
+
+	const float patchTGF = this->patchChemConcentration(TGF, in);
+	const float patchTNF = this->patchChemConcentration(TNF, in);
+	const float patchFGF = this->patchChemConcentration(FGF, in);
+	const float HAf = Agent::agentECMPtr[in].fHA[read_t];
+
+	const float x = (patchTGF > Fibroblast::proliferation[PROLIFERATION_TGF_THRESHOLD])
+						? -1.f : 1.f;                                   // k5
+
+	const double t = sim_days_at_least_one();
+	const float HAww = BMWorld::HAww;
+
+	const float prolif_b =
+		(Fibroblast::proliferation[PROLIFERATION_TIME_EFFECT]                       // k7
+			- Fibroblast::proliferation[PROLIFERATION_HA_TIME_EFFECT] * HAww)          // k8
+			* static_cast<float>(log(t))
+		+ Fibroblast::proliferation[PROLIFERATION_HA_EFFECT] * HAww                 // k9
+		- Fibroblast::proliferation[PROLIFERATION_BIOMATERIAL_BASELINE];            // k10
+
+	const float chem_arg =
+		safe_log10_arg(1.f + patchTNF + x * patchTGF + patchFGF + HAf);
+
+	const float chem_term =
+		(HAf
+			+ Fibroblast::proliferation[PROLIFERATION_ACTIVATING_FACTOR_EFFECT]        // k12
+				* log10(chem_arg)
+			+ Fibroblast::proliferation[PROLIFERATION_BASELINE_OFFSET])                // k13
+		/ safe_denominator(Fibroblast::proliferation[PROLIFERATION_CHEMICAL_EFFECT]);// k14
+
+	return prolif_b * (Fibroblast::proliferation[PROLIFERATION_BASELINE] + chem_term); // k11
+}
+
+/*
+ * Table 3, rule 9: activation.
+ *   if TGF > k27  -> activate with probability k28
+ *   if TGF > k29  -> activate
+ *   otherwise     -> activate with probability k30
+ * Probabilities are expressed in percent, as rollDice() expects.
+ */
+bool Fibroblast::should_activate(float patchTGF) {
+	if (patchTGF > Fibroblast::activation_params[ACTIVATION_TGF_INTERMEDIATE_THRESHOLD]) // k27
+	return Agent::rollDice(
+		Fibroblast::activation_params[ACTIVATION_INTERMEDIATE_PROBABILITY]);           // k28
+
+	if (patchTGF > Fibroblast::activation_params[ACTIVATION_TGF_HIGH_THRESHOLD])         // k29
+	return true;
+
+	return Agent::rollDice(
+		Fibroblast::activation_params[ACTIVATION_INDEPENDENT_PROBABILITY]);              // k30
+}
+
+/* Table 3, rule 10: deactivate with probability k31. */
+bool Fibroblast::should_deactivate() {
+	return Agent::rollDice(
+		Fibroblast::activation_params[ACTIVATION_DEACTIVATION_PROBABILITY]);             // k31
+}
+
+/*
+ * Table 3, rules 4-8: cytokine synthesis, in pg/tick, added to the per-tick
+ * secretion channel of the agent's own patch.
+ */
+void Fibroblast::create_cytokines() {
+	const int in = this->index[read_t];
+  
+	const float lTNF  = this->patchChemConcentration(TNF, in);
+	const float lTGF  = this->patchChemConcentration(TGF, in);
+	const float lFGF  = this->patchChemConcentration(FGF, in);
+	const float lIL10 = this->patchChemConcentration(IL10, in);
+	const float lHA   = Agent::agentECMPtr[in].HA[read_t];
+	(void)lFGF;
+  
+	/* TGFinc = k15 + k16 (k17 + TNF + IL10) */
+	const float tgfinc =
+		Fibroblast::tgfSynthesis[TGF_BASELINE]
+		+ Fibroblast::tgfSynthesis[TGF_FEEDBACK_EFFECT]
+			  * (Fibroblast::tgfSynthesis[TGF_FEEDBACK_BASELINE] + lTNF + lIL10);
+  
+	/* FGFinc = k18 */
+	const float fgfinc = Fibroblast::fgfSynthesis[FGF_RATE];
+  
+	/* TNFinc = k19 / (k20 + TGF + k21 IL10 + HA) */
+	const float tnfinc =
+		Fibroblast::tnfSynthesis[TNF_BASELINE]
+		/ safe_denominator(Fibroblast::tnfSynthesis[TNF_INHIBITORY_EFFECT] + lTGF
+						   + Fibroblast::tnfSynthesis[TNF_IL10_EFFECT] * lIL10 + lHA);
+  
+	/* IL6inc = k22 (k23 + TNF) / (k24 + IL10) */
+	const float il6inc =
+		Fibroblast::il6Synthesis[IL6_BASELINE]
+		* (Fibroblast::il6Synthesis[IL6_ACTIVATING_EFFECT] + lTNF)
+		/ safe_denominator(Fibroblast::il6Synthesis[IL6_INHIBITORY_EFFECT] + lIL10);
+  
+	/* IL8inc = k25 / (k26 + IL10 + HA) */
+	const float il8inc =
+		Fibroblast::il8Synthesis[IL8_BASELINE]
+		/ safe_denominator(Fibroblast::il8Synthesis[IL8_INHIBITORY_EFFECT] + lIL10 + lHA);
+  
+	this->addPatchChemSecretion(TGF, in, tgfinc);
+	this->addPatchChemSecretion(FGF, in, fgfinc);
+	this->addPatchChemSecretion(TNF, in, tnfinc);
+	this->addPatchChemSecretion(IL6, in, il6inc);
+	this->addPatchChemSecretion(IL8, in, il8inc);
+	/* IL-10 has no synthesis rule in Table 3; it enters only as a baseline. */
+}
+
+/*
+ * Table 3, rule 11: collagen synthesis, every k32 hours.
+ *   Col_b = k33 - k34 mesh - k35 E
+ *   Col   = Col_b k36 (log10(1+TGF+IL6) + k37) / (1 + FGF + k38 IL8)
+ *   HAf > HAn  -> Col + k39
+ *   HAf == HAn -> Col/k40 + k41
+ *   else       -> k42 + Col/k43
+ */
+void Fibroblast::create_collagen() {
+	const float hours = Fibroblast::collagenSynth[COLLAGEN_HOURS_BETWEEN];   // k32
+	if (hours <= 0) return;
+	if (fmod(BMWorld::reportHour(), hours) != 0) return;
+  
+	const int in = this->index[read_t];
+	const float lTGF = this->patchChemConcentration(TGF, in);
+	const float lIL6 = this->patchChemConcentration(IL6, in);
+	const float lFGF = this->patchChemConcentration(FGF, in);
+	const float lIL8 = this->patchChemConcentration(IL8, in);
+  
+	const float col_b = Fibroblast::collagenSynth[COLLAGEN_BASELINE]                 // k33
+						- Fibroblast::collagenSynth[COLLAGEN_MESH_EFFECT] * BMWorld::meshSize  // k34
+						- Fibroblast::collagenSynth[COLLAGEN_ELASTICITY_EFFECT] * BMWorld::E;  // k35
+  
+	const float col =
+		col_b * Fibroblast::collagenSynth[COLLAGEN_ACTIVATING_STRENGTH]              // k36
+		* (log10(safe_log10_arg(1.f + lTGF + lIL6))
+		   + Fibroblast::collagenSynth[COLLAGEN_ACTIVATING_OFFSET])                  // k37
+		/ safe_denominator(1.f + lFGF
+						   + Fibroblast::collagenSynth[COLLAGEN_IL8_EFFECT] * lIL8); // k38
+  
+	const float HAf = Agent::agentECMPtr[in].fHA[read_t];
+	const float HAn = Agent::agentECMPtr[in].HA[read_t];
+  
+	float rate;
+	if (HAf > HAn) {
+	  rate = col + Fibroblast::collagenSynth[COLLAGEN_HIGH_FRAG_RATIO_EFFECT];       // k39
+	} else if (HAf == HAn) {
+	  rate = col / safe_denominator(Fibroblast::collagenSynth[COLLAGEN_EQUAL_FRAG_RATIO_EFFECT]) // k40
+			 + Fibroblast::collagenSynth[COLLAGEN_EQUAL_FRAG_OFFSET];                // k41
+	} else {
+	  rate = Fibroblast::collagenSynth[COLLAGEN_BASELINE_RATE]                       // k42
+			 + col / safe_denominator(Fibroblast::collagenSynth[COLLAGEN_CHEMICAL_EFFECT]); // k43
 	}
-	else {
-		TGFrelated = -1; // High TGF (1-10ng) inhibits proliferation. 
+  
+	this->depositCollagen(static_cast<int>(rate));
+}
+
+/*
+ * Table 3, rule 12: elastin synthesis, on the same k32-hour clock.
+ *   Eln_b = k44 - k45 mesh - k46 E
+ *   Eln   = Eln_b ( (k47 log10(1+TGF) + k48) / (k49 (1+FGF+TNF)) + k50 )
+ */
+void Fibroblast::create_elastin() {
+	const float hours = Fibroblast::collagenSynth[COLLAGEN_HOURS_BETWEEN];   // k32
+	if (hours <= 0) return;
+	if (fmod(BMWorld::reportHour(), hours) != 0) return;
+  
+	const int in = this->index[read_t];
+	const float lTGF = this->patchChemConcentration(TGF, in);
+	const float lFGF = this->patchChemConcentration(FGF, in);
+	const float lTNF = this->patchChemConcentration(TNF, in);
+  
+	const float eln_b = Fibroblast::elastinSynth[ELASTIN_BASELINE]                    // k44
+						- Fibroblast::elastinSynth[ELASTIN_MESH_EFFECT] * BMWorld::meshSize // k45
+						- Fibroblast::elastinSynth[ELASTIN_ELASTICITY_EFFECT] * BMWorld::E; // k46
+  
+	const float eln =
+		eln_b * ((Fibroblast::elastinSynth[ELASTIN_ACTIVATING_STRENGTH]               // k47
+					  * log10(safe_log10_arg(1.f + lTGF))
+				  + Fibroblast::elastinSynth[ELASTIN_ACTIVATING_OFFSET])              // k48
+					 / safe_denominator(Fibroblast::elastinSynth[ELASTIN_INHIBITORY_STRENGTH] // k49
+										* (1.f + lFGF + lTNF))
+				 + Fibroblast::elastinSynth[ELASTIN_BASELINE_RATE]);                  // k50
+  
+	this->depositElastin(static_cast<int>(eln));
+}
+
+/*
+ * Table 3, rule 13: hyaluronic acid synthesis, every k51 hours.
+ *   HA_b = k52 - k53 mesh + k54 E
+ *   HA   = HA_b (k55 log10(1+TGF+TNF+FGF) + k56)
+ *   with probability HA + k57      -> move, then deposit HA
+ *   with probability k58 + HA/k59  -> deposit HA on the current patch
+ */
+void Fibroblast::create_ha() {
+	const float hours = Fibroblast::haSynth[HA_HOURS_BETWEEN];   // k51
+	if (hours <= 0) return;
+	if (fmod(BMWorld::reportHour(), hours) != 0) return;
+  
+	const int in = this->index[read_t];
+	const float lTGF = this->patchChemConcentration(TGF, in);
+	const float lTNF = this->patchChemConcentration(TNF, in);
+	const float lFGF = this->patchChemConcentration(FGF, in);
+	const float lHA  = Agent::agentECMPtr[in].HA[read_t];
+  
+	const float ha_b = Fibroblast::haSynth[HA_BASELINE]                          // k52
+					   - Fibroblast::haSynth[HA_MESH_EFFECT] * BMWorld::meshSize // k53
+					   + Fibroblast::haSynth[HA_ELASTICITY_EFFECT] * BMWorld::E; // k54
+  
+	const float ha = ha_b * (Fibroblast::haSynth[HA_ACTIVATING_STRENGTH]         // k55
+								 * log10(safe_log10_arg(1.f + lTGF + lTNF + lFGF))
+							 + Fibroblast::haSynth[HA_ACTIVATING_OFFSET]);       // k56
+  
+	if (ha <= 0.f) return;
+  
+	/* With probability HA + k57: move, then produce HA. */
+	if (Agent::rollDice(lHA + Fibroblast::haSynth[HA_MOVE_PROBABILITY])) {       // k57
+	  this->wiggle();
+	  this->depositHA(static_cast<int>(ha), 1);
 	}
-
-#ifdef CALIBRATION
-	//float prolif = log10(1 - Stem::proliferation[Stem::PROLIFERATION_TNF_EFFECT] * meanTNF - Stem::proliferation[Stem::PROLIFERATION_IL1BETA_EFFECT] * meanIL1 + TGFrelated * meanTGF - Stem::proliferation[Stem::PROLIFERATION_ELASTICITY_EFFECT] * BMWorld::E);
-	float prolif = 40; //testing
-#else  
-	float prolif = log10(1 + meanTNF + meanIL1 + TGFrelated * meanTGF);
-#endif  
-	
-	return prolif;
-}
-
-int Stem::get_daughter_type() { return progen; }
-
-float Stem::get_diff_prob(float meanTGF,
-	float meanIL1,
-	float meanTNF) {
-
-	//return (Stem::differentiation[Stem::DIFFERENTIATION_BASELINE_PROBABILITY]*100) + (Stem::differentiation[Stem::DIFFERENTIATION_TGF_EFFECT] * meanTGF);
-	return 20;
-}
-
-void Stem::calculate_ecm_synth_rates(float meanTGF, float meanIL1, float meanTNF, float patchesVolume) {
-#ifdef CALIBRATION
-	Stem::collagenSynthRate = Stem::CollagenSynth[0]
-		+ (log10(1 + meanTGF) / (1 + meanTNF + meanIL1));
-
-	if (meanTGF < (Stem::AggrecanSynth[0] / patchesVolume)) {
-		Stem::aggrecanSynthRate = Stem::collagenSynthRate / 1.2;
-	}
-	else {
-		Stem::aggrecanSynthRate = Stem::collagenSynthRate * 1.2;
-	}
-#else
-	Stem::collagenSynthRate = 10
-		+ (log10(1 + meanTGF) / (1 + meanTNF + meanIL1));
-
-	if (meanTGF < 100000) {
-		Stem::aggrecanSynthRate = Stem::collagenSynthRate / 1.2;
-	}
-	else {
-		Stem::aggrecanSynthRate = Stem::collagenSynthRate * 1.2;
-	}
-#endif
-}
-
-void Stem::create_ecm(float meanTGF, float meanIL1, float meanTNF) {
-	int in = this->index[read_t];
-
-#ifdef MODEL_SCAFFOLD
-	if (Agent::agentPatchPtr[in].type[read_t] == CaAlg) {
-		// loops based on synth rates calculated in calculate_ecm_synth_rates()
-		for (int i = 0; i < Stem::collagenSynthRate; i++)
-			this->makeOCollagen(meanTGF, meanIL1);
-		for (int i = 0; i < Stem::aggrecanSynthRate; i++)
-			this->makeOAggrecan(meanTNF, meanTGF, meanIL1);
-	}
-	else {
-		this->makeOCollagen(meanTGF, meanIL1);
-		this->makeOAggrecan(meanTNF, meanTGF, meanIL1);
-	}
-#else
-	this->makeOCollagen(meanTGF, meanIL1);
-	this->makeOAggrecan(meanTNF, meanTGF, meanIL1);
-#endif
-}
-
-void Stem::create_cytokines(float patchTGF, float patchIL1beta, float patchTNF) {
-	int in = this->index[read_t];
-	// Change in chemicals due to cells:
-#ifdef CALIBRATION
-	this->addPatchChemSecretion(TGF, in, Stem::cytokineSynthesis[Stem::CYTOKINE_TGF_BASELINE] + Cell::cytokineSynthesis[Cell::CYTOKINE_TGF_FEEDBACK_TGF] * (patchTGF)+Cell::cytokineSynthesis[Cell::CYTOKINE_TGF_FEEDBACK_IL1BETA] * (patchIL1beta)+Cell::cytokineSynthesis[Cell::CYTOKINE_TGF_FEEDBACK_TNF] * (patchTNF));//this->addPatchChemSecretion(TGF, in,  Chondrocyte::cytokineSynthesis[0] + Chondrocyte::cytokineSynthesis[1]*(1 + Chondrocyte::cytokineSynthesis[2]*patchTNF);
-	//this->addPatchChemSecretion(TGF, in, 0; //DEBUG : constant TGF
-	this->addPatchChemSecretion(TNF, in, Stem::cytokineSynthesis[Stem::CYTOKINE_TNF_BASELINE] + (Cell::cytokineSynthesis[Cell::CYTOKINE_TNF_FEEDBACK_IL1BETA] * ((patchIL1beta) / (1 + Cell::cytokineSynthesis[Cell::CYTOKINE_TNF_FEEDBACK_TGF_DENOM] * patchTGF))));//this->addPatchChemSecretion(TNF, in, Chondrocyte::cytokineSynthesis[3] + Chondrocyte::cytokineSynthesis[4]/(1 + patchTGF*Chondrocyte::cytokineSynthesis[5]);
-	//this->addPatchChemSecretion(TNF, in, 0; //DEBUG : constant TNF
-	this->addPatchChemSecretion(IL1beta, in, Stem::cytokineSynthesis[Stem::CYTOKINE_IL1BETA_BASELINE] + (Cell::cytokineSynthesis[Cell::CYTOKINE_IL1BETA_FEEDBACK_TNF] * ((patchTNF) / (1 + Cell::cytokineSynthesis[Cell::CYTOKINE_IL1BETA_FEEDBACK_TGF_DENOM] * patchTGF))));//this->addPatchChemSecretion(IL1beta, in, Chondrocyte::cytokineSynthesis[6] + (Chondrocyte::cytokineSynthesis[7]*patchTNF)/(Chondrocyte::cytokineSynthesis[8] + Chondrocyte::cytokineSynthesis[9]*patchTGF);
-#else
-	this->addPatchChemSecretion(TGF, in, 5 + (2.25 * patchTGF + 1.3 * patchIL1beta + 5.11 * patchTNF));//9.98 + 2.58*patchTGF + 5.11*patchTNF;				//2.11 + 3.7*patchTGF;
-	this->addPatchChemSecretion(TNF, in, 0 + (2.42 * patchIL1beta) / (1 + 4.22 * patchTGF));//5.16 + (2.42*patchIL1beta)/(1 + 4.22*patchTGF);	//2.4*patchIL1beta + 4.8/(1 + 1.27*patchTGF);		
-	this->addPatchChemSecretion(IL1beta, in, 0 + (5.43 * patchTNF) / (1 + 3.26 * patchTGF));//2.11 + (5.43*patchTNF)/(1 + 3.26*patchTGF);		//4;
-#endif
-}
-
-float Stem::get_migration_speed() {
-	if (BMWorld::clock == 0) {
-#ifdef CALIBRATION
-		float migration_ummin = Stem::CaAlgMigration[Stem::MIGRATION_ELASTICITY_EFFECT] * log(BMWorld::E) + Stem::CaAlgMigration[Stem::MIGRATION_BASELINE_SPEED]; // um/min
-
-		if (rollDice(0.5)) {  // Convert migration speed in um/min to patches/tick where default patchlength is 10um and default tick is 30 min
-			Stem::migrationSpeed = ceil(migration_ummin * 30 / (Agent::agentWorldPtr->patchlength * pow(10, 3)));    //patch/tick 
-		}
-		else {
-			Stem::migrationSpeed = floor(migration_ummin * 30 / (Agent::agentWorldPtr->patchlength * pow(10, 3)));    //patch/tick 
-		}
-#else
-		float migration_ummin = 0.1096 * log(BMWorld::E) + 0.35; // um/min //float migration_ummin =  0.1213*log10(Agent::agentWorldPtr->E) + 0.223; // um/min
-
-		if (rollDice(0.5)) {  // Convert migration speed in um/min to patches/tick where default patchlength is 10um and default tick is 30 min
-			Stem::migrationSpeed = ceil(migration_ummin * 30 / (Agent::agentWorldPtr->patchlength * pow(10, 3)));    //patch/tick 
-		}
-		else {
-			Stem::migrationSpeed = floor(migration_ummin * 30 / (Agent::agentWorldPtr->patchlength * pow(10, 3)));    //patch/tick 
-		}
-#endif
-		cout << "        Stem cell migration Speed (patch/tick) = " << Stem::migrationSpeed << endl;
-	}
-	return Stem::migrationSpeed;
-}
-
-float Stem::get_apoptosis_chance() {
-	return Stem::apoptosisChance;
-}
-
-float Stem::get_OCR() {
-	return Stem::OCR;
-}
-
-/* -------------------------------------------------------------------------- */
-/*                                PROGENITOR                                  */
-/* -------------------------------------------------------------------------- */
-int Progen::get_max_doublings() { return 65; }
-
-float Progen::get_prolif_prob(float meanTGF,
-	float meanIL1,
-	float meanTNF) {
-
-#ifdef CALIBRATION
-	//float prolif = log10(1 + meanTNF - meanIL1 + meanTGF);
-	float prolif = 40; //testing
-#else  
-	float prolif = log10(1 + meanTNF - meanIL1 + meanTGF);
-#endif 
-
-	return prolif;
-}
-
-int Progen::get_daughter_type() { return np; }
-
-float Progen::get_diff_prob(float meanTGF,
-	float meanIL1,
-	float meanTNF) {
-
-	return 20;
-}
-
-void Progen::calculate_ecm_synth_rates(float meanTGF, float meanIL1, float meanTNF, float patchesVolume) {
-#ifdef CALIBRATION
-	Progen::aggrecanSynthRate = Progen::AggrecanSynth[0]
-		+ (log10(1 + meanTGF) / (1 + meanTNF + meanIL1));
-#else
-	Progen::aggrecanSynthRate = Progen::AggrecanSynth[0];
-#endif
-}
-
-void Progen::create_ecm(float meanTGF, float meanIL1, float meanTNF) {
-	int in = this->index[read_t];
-
-#ifdef MODEL_SCAFFOLD
-	if (Agent::agentPatchPtr[in].type[read_t] == CaAlg) {
-		// progen on scaffold only loops aggrecan, never collagen
-		for (int i = 0; i < Progen::aggrecanSynthRate; i++)
-			this->makeOAggrecan(meanTNF, meanTGF, meanIL1);
-	}
-	else {
-		this->makeOCollagen(meanTGF, meanIL1);
-		this->makeOAggrecan(meanTNF, meanTGF, meanIL1);
-	}
-#else
-	this->makeOCollagen(meanTGF, meanIL1);
-	this->makeOAggrecan(meanTNF, meanTGF, meanIL1);
-#endif
-}
-
-void Progen::create_cytokines(float patchTGF, float patchIL1beta, float patchTNF) {
-	int in = this->index[read_t];
-	// Change in chemicals due to cells:
-#ifdef CALIBRATION
-	this->addPatchChemSecretion(TGF, in, Progen::cytokineSynthesis[Progen::CYTOKINE_TGF_BASELINE] + Cell::cytokineSynthesis[Cell::CYTOKINE_TGF_FEEDBACK_TGF] * (patchTGF)+Cell::cytokineSynthesis[Cell::CYTOKINE_TGF_FEEDBACK_IL1BETA] * (patchIL1beta)+Cell::cytokineSynthesis[Cell::CYTOKINE_TGF_FEEDBACK_TNF] * (patchTNF));//this->addPatchChemSecretion(TGF, in,  Chondrocyte::cytokineSynthesis[0] + Chondrocyte::cytokineSynthesis[1]*(1 + Chondrocyte::cytokineSynthesis[2]*patchTNF);
-	//this->addPatchChemSecretion(TGF, in, 0; //DEBUG : constant TGF
-	this->addPatchChemSecretion(TNF, in, Progen::cytokineSynthesis[Progen::CYTOKINE_TNF_BASELINE] + (Cell::cytokineSynthesis[Cell::CYTOKINE_TNF_FEEDBACK_IL1BETA] * ((patchIL1beta) / (1 + Cell::cytokineSynthesis[Cell::CYTOKINE_TNF_FEEDBACK_TGF_DENOM] * patchTGF))));//this->addPatchChemSecretion(TNF, in, Chondrocyte::cytokineSynthesis[3] + Chondrocyte::cytokineSynthesis[4]/(1 + patchTGF*Chondrocyte::cytokineSynthesis[5]);
-	//this->addPatchChemSecretion(TNF, in, 0; //DEBUG : constant TNF
-	this->addPatchChemSecretion(IL1beta, in, Progen::cytokineSynthesis[Progen::CYTOKINE_IL1BETA_BASELINE] + (Cell::cytokineSynthesis[Cell::CYTOKINE_IL1BETA_FEEDBACK_TNF] * ((patchTNF) / (1 + Cell::cytokineSynthesis[Cell::CYTOKINE_IL1BETA_FEEDBACK_TGF_DENOM] * patchTGF))));//this->addPatchChemSecretion(IL1beta, in, Chondrocyte::cytokineSynthesis[6] + (Chondrocyte::cytokineSynthesis[7]*patchTNF)/(Chondrocyte::cytokineSynthesis[8] + Chondrocyte::cytokineSynthesis[9]*patchTGF);
-#else
-	this->addPatchChemSecretion(TGF, in, 1 + (0.25 * patchTGF + 1.3 * patchIL1beta + 5.11 * patchTNF));//9.98 + 2.58*patchTGF + 5.11*patchTNF;				//2.11 + 3.7*patchTGF;
-	this->addPatchChemSecretion(TNF, in, 2.58 + (2.42 * patchIL1beta) / (1 + 4.22 * patchTGF));//5.16 + (2.42*patchIL1beta)/(1 + 4.22*patchTGF);	//2.4*patchIL1beta + 4.8/(1 + 1.27*patchTGF);		
-	this->addPatchChemSecretion(IL1beta, in, 0 + (5.43 * patchTNF) / (1 + 3.26 * patchTGF));//2.11 + (5.43*patchTNF)/(1 + 3.26*patchTGF);		//4;
-#endif
-}
-
-float Progen::get_migration_speed() {
-	if (BMWorld::clock == 0) {
-#ifdef CALIBRATION
-		float migration_ummin = Progen::CaAlgMigration[Progen::MIGRATION_ELASTICITY_EFFECT] * log(BMWorld::E) + Progen::CaAlgMigration[Progen::MIGRATION_BASELINE_SPEED]; // um/min
-
-		if (rollDice(0.5)) {  // Convert migration speed in um/min to patches/tick where default patchlength is 10um and default tick is 30 min
-			Progen::migrationSpeed = ceil(migration_ummin * 30 / (Agent::agentWorldPtr->patchlength * pow(10, 3)));    //patch/tick 
-		}
-		else {
-			Progen::migrationSpeed = floor(migration_ummin * 30 / (Agent::agentWorldPtr->patchlength * pow(10, 3)));    //patch/tick 
-		}
-#else
-		float migration_ummin = 0.1096 * log(BMWorld::E) + ((NP::migrationSpeed - Stem::migrationSpeed) / 2); // um/min //float migration_ummin =  0.1213*log10(Agent::agentWorldPtr->E) + 0.223; // um/min
-
-		if (rollDice(0.5)) {  // Convert migration speed in um/min to patches/tick where default patchlength is 10um and default tick is 30 min
-			Progen::migrationSpeed = ceil(migration_ummin * 30 / (Agent::agentWorldPtr->patchlength * pow(10, 3)));    //patch/tick 
-		}
-		else {
-			Progen::migrationSpeed = floor(migration_ummin * 30 / (Agent::agentWorldPtr->patchlength * pow(10, 3)));    //patch/tick 
-		}
-#endif
-		cout << "        Progenitor cell migration Speed (patch/tick) = " << Progen::migrationSpeed << endl;
-	}
-	return Progen::migrationSpeed;
-}
-
-float Progen::get_apoptosis_chance() {
-	return Progen::apoptosisChance;
-}
-
-float Progen::get_OCR() {
-	return Progen::OCR;
-}
-
-/* -------------------------------------------------------------------------- */
-/*                                     NP                                     */
-/* -------------------------------------------------------------------------- */
-int NP::get_max_doublings() { return 27; }
-
-float NP::get_prolif_prob(float meanTGF,
-	float meanIL1,
-	float meanTNF) {
-
-	int TGFrelated = 0;
-
-#ifdef CALIBRATION
-	if (meanTGF <= Cell::proliferation[Cell::PROLIFERATION_TGF_THRESHOLD]) {
-#else
-	if (meanTGF <= 10) {
-#endif
-		TGFrelated = 1;  // Low TGF (0.1-1 ng) stimulate chond proliferation and attraction.
-	}
-	else {
-		TGFrelated = -1;  // High TGF (1-10 ng) inhibits proliferation.
-	}
-
-#ifdef CALIBRATION
-	float prolif = Cell::proliferation[Cell::PROLIFERATION_LOG_SCALE] * (log10(1 + meanTNF + meanIL1 + TGFrelated * meanTGF)) + Cell::proliferation[Cell::PROLIFERATION_LOG_OFFSET];
-#else  
-	float prolif = log10(1 + meanTNF + meanIL1 + TGFrelated * meanTGF);
-#endif 
-
-	return prolif;
-}
-
-void NP::calculate_ecm_synth_rates(float meanTGF, float meanIL1, float meanTNF, float patchesVolume) {
-#ifdef CALIBRATION
-	NP::collagenSynthRate = NP::CollagenSynth[NP::COLLAGEN_SCALING_FACTOR]
-		* (NP::CollagenSynth[NP::COLLAGEN_TIME_EFFECT] * BMWorld::reportDay() + NP::CollagenSynth[NP::COLLAGEN_BASELINE_RATE]);
-	NP::aggrecanSynthRate = NP::AggrecanSynth[NP::AGGRECAN_SCALING_FACTOR]
-		* (NP::AggrecanSynth[NP::AGGRECAN_TIME_EFFECT] * BMWorld::reportDay() + NP::AggrecanSynth[NP::AGGRECAN_BASELINE_RATE]);
-#else
-	NP::collagenSynthRate = 10 * (6.45 * BMWorld::reportDay() + 3.6);
-	NP::aggrecanSynthRate = 20 * (38 * BMWorld::reportDay() + 16.6);
-#endif
-}
-
-void NP::create_ecm(float meanTGF, float meanIL1, float meanTNF) {
-	// Active cell adhered to Ca-Alg synthesis ECM according the substrate mechanical properties:
-	int in = this->index[read_t];
-	if (Agent::agentPatchPtr[in].type[read_t] == CaAlg) {
-		for (int i = 0; i < NP::collagenSynthRate; i++) {
-			this->makeOCollagen(meanTGF, meanIL1);
-		}
-		for (int i = 0; i < NP::aggrecanSynthRate; i++) {
-			this->makeOAggrecan(meanTNF, meanTGF, meanIL1);
-		}
-	}
-	else {
-		this->makeOCollagen(meanTGF, meanIL1);
-		this->makeOAggrecan(meanTNF, meanTGF, meanIL1);
+  
+	/* With probability k58 + HA/k59: produce HA in the same patch. */
+	if (Agent::rollDice(Fibroblast::haSynth[HA_SAME_PATCH_PROBABILITY]           // k58
+						+ lHA / safe_denominator(Fibroblast::haSynth[HA_SAME_PATCH_EFFECT]))) { // k59
+	  this->depositHA(static_cast<int>(ha), 1);
 	}
 }
 
-void NP::create_cytokines(float patchTGF, float patchIL1beta, float patchTNF) {
-	int in = this->index[read_t];
-	// Change in chemicals due to cells:
-#ifdef CALIBRATION
-	this->addPatchChemSecretion(TGF, in, Cell::cytokineSynthesis[Cell::CYTOKINE_TGF_BASELINE] + Cell::cytokineSynthesis[Cell::CYTOKINE_TGF_FEEDBACK_TGF] * (patchTGF)+Cell::cytokineSynthesis[Cell::CYTOKINE_TGF_FEEDBACK_IL1BETA] * (patchIL1beta)+Cell::cytokineSynthesis[Cell::CYTOKINE_TGF_FEEDBACK_TNF] * (patchTNF));//this->addPatchChemSecretion(TGF, in,  Chondrocyte::cytokineSynthesis[0] + Chondrocyte::cytokineSynthesis[1]*(1 + Chondrocyte::cytokineSynthesis[2]*patchTNF);
-	//this->addPatchChemSecretion(TGF, in, 0; //DEBUG : constant TGF
-	this->addPatchChemSecretion(TNF, in, Cell::cytokineSynthesis[Cell::CYTOKINE_TNF_BASELINE] + (Cell::cytokineSynthesis[Cell::CYTOKINE_TNF_FEEDBACK_IL1BETA] * ((patchIL1beta) / (1 + Cell::cytokineSynthesis[Cell::CYTOKINE_TNF_FEEDBACK_TGF_DENOM] * patchTGF))));//this->addPatchChemSecretion(TNF, in, Chondrocyte::cytokineSynthesis[3] + Chondrocyte::cytokineSynthesis[4]/(1 + patchTGF*Chondrocyte::cytokineSynthesis[5]);
-	//this->addPatchChemSecretion(TNF, in, 0; //DEBUG : constant TNF
-	this->addPatchChemSecretion(IL1beta, in, Cell::cytokineSynthesis[Cell::CYTOKINE_IL1BETA_BASELINE] + (Cell::cytokineSynthesis[Cell::CYTOKINE_IL1BETA_FEEDBACK_TNF] * ((patchTNF) / (1 + Cell::cytokineSynthesis[Cell::CYTOKINE_IL1BETA_FEEDBACK_TGF_DENOM] * patchTGF))));//this->addPatchChemSecretion(IL1beta, in, Chondrocyte::cytokineSynthesis[6] + (Chondrocyte::cytokineSynthesis[7]*patchTNF)/(Chondrocyte::cytokineSynthesis[8] + Chondrocyte::cytokineSynthesis[9]*patchTGF);
-#else
-	this->addPatchChemSecretion(TGF, in, 10 + 0.05 * (patchTGF + 10 * patchTNF));//9.98 + 2.58*patchTGF + 5.11*patchTNF;				//2.11 + 3.7*patchTGF;
-	this->addPatchChemSecretion(TNF, in, 5 + (2.4 * patchIL1beta) / (1 + 4 * patchTGF));//5.16 + (2.42*patchIL1beta)/(1 + 4.22*patchTGF);	//2.4*patchIL1beta + 4.8/(1 + 1.27*patchTGF);		
-	this->addPatchChemSecretion(IL1beta, in, 2 + (5 * patchTNF) / (1 + 3.2 * patchTGF));//2.11 + (5.43*patchTNF)/(1 + 3.26*patchTGF);		//4;
-#endif
-}
-
-float NP::get_migration_speed() {
-#ifdef CALIBRATION
-	float migration_ummin = NP::CaAlgMigration[NP::MIGRATION_ELASTICITY_EFFECT] * log(BMWorld::E) + NP::CaAlgMigration[NP::MIGRATION_BASELINE_SPEED]; // um/min
-
-	if (rollDice(0.5)) {  // Convert migration speed in um/min to patches/tick where default patchlength is 10um and default tick is 30 min
-		NP::migrationSpeed = ceil(migration_ummin * 30 / (Agent::agentWorldPtr->patchlength * pow(10, 3)));    //patch/tick 
-	}
-	else {
-		NP::migrationSpeed = floor(migration_ummin * 30 / (Agent::agentWorldPtr->patchlength * pow(10, 3)));    //patch/tick 
-	}
-#else
-	float migration_ummin = 0.1096 * log(BMWorld::E) + 0.2431; // um/min //float migration_ummin =  0.1213*log10(Agent::agentWorldPtr->E) + 0.223; // um/min
-
-	if (rollDice(0.5)) {  // Convert migration speed in um/min to patches/tick where default patchlength is 10um and default tick is 30 min
-		NP::migrationSpeed = ceil(migration_ummin * 30 / (Agent::agentWorldPtr->patchlength * pow(10, 3)));    //patch/tick 
-	}
-	else {
-		NP::migrationSpeed = floor(migration_ummin * 30 / (Agent::agentWorldPtr->patchlength * pow(10, 3)));    //patch/tick 
-	}
-#endif
-	cout << "        NP cell migration Speed (patch/tick) = " << NP::migrationSpeed << endl;
-	return NP::migrationSpeed;
-}
-
-bool NP::can_tgf_excite() {
-	return this->meanNeighborConcentration(TGF) > 0;
-}
-
-float NP::get_apoptosis_chance() {
-	return NP::apoptosisChance;
-}
-
-float NP::get_OCR() {
-	return NP::OCR;
-}

@@ -41,55 +41,37 @@ using namespace std;
 /*                            STATIC VARIABLES INITIALIZATIONS */
 /* ------------------------------------------------------------------------------------
  */
-unsigned BMWorld::seed = 27000; // initial number of cells
-bool BMWorld::highTNFdamage = false;
+unsigned BMWorld::seed = 27000;
 float BMWorld::patchpermm = 0;
 float BMWorld::liveCells = 0;
 float BMWorld::deadCells = 0;
 float BMWorld::deletedCells = 0;
 float BMWorld::prevCells = 0;
-float BMWorld::initialO2 = 200;   // Initial concentration of oxygen (umol/L)
-float BMWorld::incrementO2 = 0.1; // Percentage of initial patch O2 to add every
-                                  // tick as replenishment from external source
-#ifdef MODEL_SCAFFOLD
-int BMWorld::initialCaAlg = 0;
-float BMWorld::E = 0;     // Effective stiffness
-float G;                  // Elastic Modulus (kPa)
-float pXL;                // Crosslink Density (mmol/mL = M)
-float Alg_Mn;             // molecular weight of alginate (kDa)
-int highMW_alg;           // ratio component of high-MW alginate
-int lowMW_alg;            // ratio component of low-MW alginate
-float Q;                  // Swelling Ratio
-float w = 0;              // Mass Loss (%)
-float poreWidth = 200.00; // (um)
-#endif
-
-#ifdef PEPTIDE_BM
-float BMWorld::E_0 = 0;
-float BMWorld::E_inf = 0;
-float BMWorld::t = 0;
-#endif
 
 #ifdef MODEL_SCAFFOLD
-float BMWorld::Ca_Mw = 3400; // Ca Molecular Weight (Mw ≈ 3,400 = g/mol)
-float BMWorld::Alg_Mn =
-    1500; // Average molecular weight (Mw = 1 kDa = 1000 g/mol)
-float BMWorld::totalVolumeML;
-// float BMWorld::Alg_Mn = 90;
-// float BMWorld::Alg_Mn = 200; //143;
-#endif
+int   BMWorld::initialPatches = 0;
+float BMWorld::totalVolumeML = 0;
 
-float BMWorld::thresholdTNFdamage = 10.0; // ng //unused in IVDBM-ABM
-float BMWorld::cytokineDecay[6] = {0.2, 0.2, 0.2, 0.2, 0.2, 0.5};  // 0.2, 0.2,
-float BMWorld::halfLifes_static[6] = {33.6, 2.7, 46, 103, 24, 60}; // 13, 13,
+/* World variables, Manuscript Table 2 */
+float BMWorld::E         = 0;   // Pa
+float BMWorld::poreWidth = 0;   // um
+float BMWorld::meshSize  = 0;   // um^-1
+float BMWorld::Q         = 0;   // % w/w
+float BMWorld::massLoss  = 0;   // %
+float BMWorld::pXL       = 0;   // mmol/mL
 
-#ifdef MODEL_SCAFFOLD
+float BMWorld::HAww  = 0;
+float BMWorld::HAwv  = 0;
+float BMWorld::TPwv  = 0;
+float BMWorld::XLww  = 0;
+float BMWorld::TDBMR = 0;
+
+/* Biomaterial-rule parameters, Manuscript Table 4 (c1..c19), filled from JSON */
 float BMWorld::ElasticMod[BMWorld::ELASTIC_MOD_COUNT] = {};
-float BMWorld::XLDensity[2] = {
-    2.3, 10.1}; // IN IVDBM-ABM (stem cell version) THESE ARE NOT USED ANYWHERE
+float BMWorld::XLDensity [BMWorld::XLDENSITY_COUNT]   = {};
 float BMWorld::SwellRatio[BMWorld::SWELL_RATIO_COUNT] = {};
-float BMWorld::MassLoss[BMWorld::MASS_LOSS_COUNT] = {};
-float BMWorld::PoreSize[BMWorld::PORE_SIZE_COUNT] = {};
+float BMWorld::MassLoss  [BMWorld::MASS_LOSS_COUNT]   = {};
+float BMWorld::PoreSize  [BMWorld::PORE_SIZE_COUNT]   = {};
 #endif
 
 #ifdef PEPTIDE_BM
@@ -133,6 +115,10 @@ BMWorld::BMWorld(double length, double width, double height, double plength) {
 
   // Read input parameters (chem baseline, wound dimensions, initial cells) from
   // config file
+    /* Construct volume: needed by userInput(), initializeECM() and
+     * initializeCells(), so compute it once as soon as the grid is known. */
+  BMWorld::totalVolumeML = (nx * ny * nz) * pow(this->patchlength, 3) * 1e-3;  // mm^3 -> mL
+
   int temp = BMWorld::userInput();
   cout << "length, width, height: " << length << " mm, " << width << " mm, "
        << height << " mm" << endl;
@@ -192,7 +178,7 @@ BMWorld::BMWorld(double length, double width, double height, double plength) {
   this->initializeECM();
   this->initializeCells();
 #ifdef MODEL_SCAFFOLD
-  this->initializeCaAlg();
+  this->initializeBiomaterial();
 #endif
   /* Chemistry controller. */
   {
@@ -208,7 +194,7 @@ BMWorld::BMWorld(double length, double width, double height, double plength) {
     this->sync_baseline_chem_from_config();
     this->initializeChemBaseline();
   }
-  this->initializeDamage();
+  // this->initializeDamage();
 
   /* Calling update functions to synchronize read and write portion of the
    * attributes */
@@ -271,11 +257,11 @@ void BMWorld::assignPatches(int type, int xmin, int xmax, int ymin, int ymax,
           this->worldPatch[in].color[write_t] = cdamage;
           this->worldPatch[in].dirty = true;
           break;
-        case CaAlg:
-          this->worldPatch[in].type[read_t] = CaAlg;
-          this->worldPatch[in].type[write_t] = CaAlg;
-          this->worldPatch[in].color[read_t] = cCaAlg;
-          this->worldPatch[in].color[write_t] = cCaAlg;
+        case biomaterial:
+          this->worldPatch[in].type[read_t] = biomaterial;
+          this->worldPatch[in].type[write_t] = biomaterial;
+          this->worldPatch[in].color[read_t] = cbiomaterial;
+          this->worldPatch[in].color[write_t] = cbiomaterial;
           this->worldPatch[in].dirty = true;
           break;
         }
@@ -286,168 +272,70 @@ void BMWorld::assignPatches(int type, int xmin, int xmax, int ymin, int ymax,
 
 void BMWorld::initializePatches() {
 #ifdef MODEL_3D
-  assignPatches(CaAlg, 0, nx, 0, ny, 0, nz);
+  assignPatches(biomaterial, 0, nx, 0, ny, 0, nz);
 #else
-  assignPatches(CaAlg, 0, nx, 0, ny, 0, 0);
+  assignPatches(biomaterial, 0, nx, 0, ny, 0, 0);
 #endif
-
+  tnfLine.resize(nx / 2 + 1, 0.0f);
+  fgfLine.resize(nx / 2 + 1, 0.0f);
+  il6Line.resize(nx / 2 + 1, 0.0f);
+  il8Line.resize(nx / 2 + 1, 0.0f);
+  il10Line.resize(nx / 2 + 1, 0.0f);
   tgfLine.resize(nx / 2 + 1, 0.0f);
-  o2Line.resize(nx / 2 + 1, 0.0f);
+  // o2Line.resize(nx / 2 + 1, 0.0f);
   lineY = ny / 2;
   lineZ = nz / 2;
 
   // Assign values to initial:
-  BMWorld::initialCaAlg = this->countPatchType(CaAlg);
+  BMWorld::initialPatches = this->countPatchType(biomaterial);
   // cout << "Finished building Ca-Alg Hydrogel" << endl;
 }
 
 #ifdef MODEL_SCAFFOLD
-void BMWorld::initializeCaAlg() {
-  cout << "Begin Calculating Ca-Alg Properties..." << endl;
-
-  double scaffoldVolume = (nx * ny * nz) * pow(this->patchlength, 3); // mm^3
-  double hydrogelVolume = scaffoldVolume * pow(10, -3);               // mL
-
-  BMWorld::totalVolumeML = hydrogelVolume;
-
-  /* ---------------------- Parameters of Ca-Alg Scaffold ---------------------
-   */
-  float Alg_ww = this->Alg_wv / (this->Alg_wv);
-
-  /* ----- Calculate initial bulk mechanical properties of Ca-Alg Scaffold ----
-   */
-  /* p_XL: Crosslink Density (mmol/mL = M)
-   * 		 Linear dependence of Shear modulus on cross-link concentration
-   * for constant polymer concentration
-   */
-  this->pXL = this->pXL / 1000; // convert mM to M
-  // this->pXL = 0.014;
-
-  if (this->highMW_alg == 1 && this->lowMW_alg == 0) { // 'high' condition
-    this->Alg_Mn = 1500;
-  } else if (this->highMW_alg == 0 && this->lowMW_alg == 1) { // 'low' condition
-    this->Alg_Mn = 95;
-  } else { // 'mix' condition: calculates a weighted avg molecular weight
-    float highMW_kDa = 1500;
-    float lowMW_kDa = 50;
-    this->Alg_Mn =
-        (pow(this->highMW_alg * highMW_kDa, 2) +
-         pow(this->lowMW_alg * lowMW_kDa, 2)) /
-        ((this->highMW_alg * highMW_kDa) + (this->lowMW_alg * lowMW_kDa));
-  }
-
-  cout << "		Final Alginate concentration (%w/v): " << this->Alg_wv
-       << endl;
-  cout << "       Alginate Molecular Weight (kDa) = " << this->Alg_Mn << endl;
-  cout << "       Calcium Crosslinking Density (mmol/mL = M) = " << this->pXL
-       << endl;
-
-/* Calculate Initial Elastic Modulus E (kPa)
- *  E = a (( b*TotalProtein(w/v) + c)* Alg(w/w) + d*TP(w/v)) + e*(f*Alg(w/v) +
- * g)*XL(w/w)
- *
- *       Follows rule of mixtures where stiffness of mixture is weight average
- * of components. Linear dependence of modulus on cross-link concentration for
- * constant polymer concentration
+/*
+ * Manuscript Table 4 - biomaterial rules evaluated once from the composition.
  */
-#ifdef CALIBRATION
-  this->E = -BMWorld::ElasticMod[BMWorld::ELASTIC_INTERCEPT]
-      +BMWorld::ElasticMod[BMWorld::ELASTIC_ALGINATE_CONCENTRATION] * (this->Alg_wv)
-      -BMWorld::ElasticMod[BMWorld::ELASTIC_CROSSLINKER_DENSITY] * (this->pXL)
-      +BMWorld::ElasticMod[BMWorld::ELASTIC_ALGINATE_MOLECULAR_WEIGHT] * (this->Alg_Mn)
-      +BMWorld::ElasticMod[BMWorld::ELASTIC_ALGINATE_CROSSLINKER_INTERACTION] * (this->Alg_wv) * (this->pXL)
-      -BMWorld::ElasticMod[BMWorld::ELASTIC_ALGINATE_MW_INTERACTION] * (this->Alg_wv) * (this->Alg_Mn)
-      -BMWorld::ElasticMod[BMWorld::ELASTIC_MW_CROSSLINKER_INTERACTION] * (this->pXL) * (this->Alg_Mn);
-#else
-  this->E = -125 + 58 * (Alg_wv)-971 * (pXL) + 1.037 * (Alg_Mn) +
-            756 * (Alg_wv * pXL) - 0.516 * (Alg_wv * Alg_Mn) -
-            0.165 * (pXL * Alg_Mn);
-#endif
+ void BMWorld::initializeBiomaterial() {
+  cout << "Computing biomaterial properties (Manuscript Table 4)..." << endl;
 
-#ifdef PEPTIDE_BM
-  if (this->peptide.compare("MAL") == 0) {
-    BMWorld::E_0 = MAL.E_init;
-    BMWorld::E_inf = MAL.E_eq;
-    BMWorld::t = MAL.t_stress;
-  } else if (this->peptide.compare("CHAD") == 0) {
-    BMWorld::E_0 = CHAD.E_init;
-    BMWorld::E_inf = CHAD.E_eq;
-    BMWorld::t = CHAD.t_stress;
-  } else if (this->peptide.compare("hA5G26") == 0) {
-    BMWorld::E_0 = hA5G26.E_init;
-    BMWorld::E_inf = hA5G26.E_eq;
-    BMWorld::t = hA5G26.t_stress;
-  } else if (this->peptide.compare("IKVAV") == 0) {
-    BMWorld::E_0 = IKVAV.E_init;
-    BMWorld::E_inf = IKVAV.E_eq;
-    BMWorld::t = IKVAV.t_stress;
-  }
-  cout << "Peptide: " << this->peptide
-       << ". Parameters being used are: " << BMWorld::E_0 << BMWorld::E_inf
-       << BMWorld::t << endl;
-  BMWorld::E = BMWorld::E_inf + (BMWorld::E_0 - BMWorld::E_inf) *
-                                    exp(-(BMWorld::clock * 30 * 60) /
-                                        BMWorld::t); // converts tick to seconds
-#endif
+  /* rho_XL = c7 - c8 TDB_MR   [mmol/mL] */
+  BMWorld::pXL = BMWorld::XLDensity[XLDENSITY_BASELINE]                      // c7
+                 - BMWorld::XLDensity[XLDENSITY_THIOL_DOUBLE_BOND_EFFECT]    // c8
+                       * BMWorld::TDBMR;
 
-  cout << "       Elastic Modulus (kPa) = " << this->E << endl;
+  /* E = c1 TPwv HAww + c2 HAww + c3 TPwv + c4 HAwv XLww + c5 XLww + c6  [Pa] */
+  BMWorld::E = BMWorld::ElasticMod[ELASTIC_POLYMER_HA_INTERACTION]           // c1
+                   * BMWorld::TPwv * BMWorld::HAww
+               + BMWorld::ElasticMod[ELASTIC_HA_CONCENTRATION]               // c2
+                     * BMWorld::HAww
+               + BMWorld::ElasticMod[ELASTIC_POLYMER_CONCENTRATION]          // c3
+                     * BMWorld::TPwv
+               + BMWorld::ElasticMod[ELASTIC_HA_CROSSLINKER_INTERACTION]     // c4
+                     * BMWorld::HAwv * BMWorld::XLww
+               + BMWorld::ElasticMod[ELASTIC_CROSSLINKER_CONCENTRATION]      // c5
+                     * BMWorld::XLww
+               + BMWorld::ElasticMod[ELASTIC_BASELINE];                      // c6
 
-/* Pore Size (um): poreWidth = -a * Alg_ww^2 + b * Alg_ww + c */
-#ifdef CALIBRATION
-  this->poreWidth = -BMWorld::PoreSize[BMWorld::PORE_CROSSLINKER_EFFECT] * (pXL) + BMWorld::PoreSize[BMWorld::PORE_BASELINE];
-#else
-  this->poreWidth =
-      -1769.84 * (pXL) +
-      258.5; //-0.3113*pow(Alg_ww,2) + 1.5*Alg_ww + 50;   //this->poreWidth =
-             //(-0.01)*345.2*pow(Alg_ww,2) + 309.9*Alg_ww + 138.1;
-#endif
-  cout << "     this->poreWidth = -" << BMWorld::PoreSize[BMWorld::PORE_CROSSLINKER_EFFECT] << "*" << (pXL)
-       << " + " << BMWorld::PoreSize[BMWorld::PORE_BASELINE] << endl;
-  cout << "       Pore Width (um): " << this->poreWidth << endl;
+  /* p = -c17 HAww^2 + c18 HAww + c19   [um] */
+  BMWorld::poreWidth =
+      -BMWorld::PoreSize[PORE_HA_QUADRATIC_EFFECT] * BMWorld::HAww * BMWorld::HAww // c17
+      + BMWorld::PoreSize[PORE_HA_LINEAR_EFFECT] * BMWorld::HAww                   // c18
+      + BMWorld::PoreSize[PORE_BASELINE];                                          // c19
 
-/* Swelling Ratio:
- *       Swelling Ratio increase with Alg content and with time
- *       Important in retaining water, facilitating diffusion.
- */
-#ifdef CALIBRATION
-  this->Q = BMWorld::SwellRatio[BMWorld::SWELL_BASELINE] -
-            BMWorld::SwellRatio[BMWorld::SWELL_TIME_EFFECT] * (this->reportDay()) -
-            BMWorld::SwellRatio[BMWorld::SWELL_ALGINATE_CONCENTRATION_EFFECT] * (this->Alg_wv) -
-            BMWorld::SwellRatio[BMWorld::SWELL_TIME_CROSSLINKER_INTERACTION] * (this->reportDay()) * (this->pXL) +
-            BMWorld::SwellRatio[BMWorld::SWELL_ALGINATE_CROSSLINKER_INTERACTION] * (this->Alg_wv) * (this->pXL);
-#else
-  this->Q = 72.478 - 0.131 * (this->reportDay()) -
-            22.034 * (Alg_wv)-3.284 * (this->reportDay()) * (pXL) +
-            35.752 * (Alg_wv) * (pXL);
-#endif
-  // cout << "    this->Q ="<< BMWorld::SwellRatio[0]<< "-"<<
-  // BMWorld::SwellRatio[1]<<"*"<<(this->reportDay())<<" - "<<
-  // BMWorld::SwellRatio[2]<<"*"<<(Alg_wv)<<" -"<<
-  // BMWorld::SwellRatio[3]<<"*"<<(this->reportDay())<<"*"<<(pXL) <<" + "<<
-  // BMWorld::SwellRatio[4]<<"*"<<(Alg_wv)<<"*"<<(pXL) << endl;
-  cout << "       Swelling Ratio: " << this->Q << endl;
+  /* mesh = 15000 / p   [um^-1]   (Manuscript Table 2) */
+  BMWorld::meshSize =
+      (BMWorld::poreWidth > 0.f) ? 15000.f / BMWorld::poreWidth : 0.f;
 
-/* Mass Loss (%)
- *       Instable hydrogel degrades, replaced with cell-synthesized ECM proteins
- *       Mass loss fraction (%) increases with time and Alg content
- */
-#ifdef CALIBRATION
-  this->w = 0; // this->w = BMWorld::MassLoss[0] + BMWorld::MassLoss[1]*(pXL) +
-               // BMWorld::MassLoss[2]*(reportDay()) -
-               // BMWorld::MassLoss[3]*(pXL)*(reportDay());
-#else
-  this->w = 0.234 + 7.785 * (pXL) + 0.15 * (reportDay()) -
-            1.36 * (pXL) * (reportDay());
-#endif
-  if (w < 0)
-    w = 0; // no negative mass loss
-  // cout << " 	this->w ="<< BMWorld::MassLoss[0]<< " +"<<
-  // BMWorld::MassLoss[1]<<"*"<<(pXL)<<" +"<<
-  // BMWorld::MassLoss[2]<<"*"<<(reportDay())<<" - "<<
-  // BMWorld::MassLoss[3]<<"*"<<(pXL)<<"*"<<(reportDay()) << endl;
-  cout << " Mass Loss (%): " << this->w << endl;
+  /* Q and w_l at t = 0. */
+  this->updateSwellingRatio();
+  this->updateMassLoss();
 
-  cout << "Finished calculating initial Ca-Alg properties" << endl;
+  cout << "  Crosslink density rho_XL (mmol/mL) = " << BMWorld::pXL << endl;
+  cout << "  Elastic modulus   E      (Pa)      = " << BMWorld::E << endl;
+  cout << "  Pore size         p      (um)      = " << BMWorld::poreWidth << endl;
+  cout << "  Mesh size         mesh   (um^-1)   = " << BMWorld::meshSize << endl;
+  cout << "  Swelling ratio    Q      (% w/w)   = " << BMWorld::Q << endl;
+  cout << "  Mass loss         w_l    (%)       = " << BMWorld::massLoss << endl;
 }
 #endif // MODEL_SCAFFOLD
 
@@ -461,15 +349,20 @@ void BMWorld::sync_baseline_chem_from_config() {
   const ChemicalEnvironmentConfig &cfg = chemical_environment_->configuration();
   this->typesOfChem = cfg.channel_count;
 
-  this->baselineChem.assign(4, 0.f);
+  this->baselineChem.assign(6, 0.f);
   this->baselineChem[TNF] =
       chemical_environment_->baseline_total_mass_for("TNF");
   this->baselineChem[TGF] =
       chemical_environment_->baseline_total_mass_for("TGF");
-  this->baselineChem[IL1beta] =
-      chemical_environment_->baseline_total_mass_for("IL1beta");
-  this->baselineChem[o2] = chemical_environment_->baseline_total_mass_for("o2");
-
+  this->baselineChem[FGF] =
+      chemical_environment_->baseline_total_mass_for("FGF");
+  this->baselineChem[IL6] =
+      chemical_environment_->baseline_total_mass_for("IL6");
+  this->baselineChem[IL8] =
+      chemical_environment_->baseline_total_mass_for("IL8");
+  this->baselineChem[IL10] =
+      chemical_environment_->baseline_total_mass_for("IL10");
+  
   cout << "Chemical environment config: " << cfg.model << endl;
   cout << "  tick_interval_minutes = " << cfg.tick_interval_minutes << endl;
   cout << "  channel_count = " << cfg.channel_count << endl;
@@ -493,16 +386,19 @@ void BMWorld::initializeChemBaseline() {
 
   chemical_environment_->clear_delta_channels();
 
-  if (this->baselineChem.size() != 4) {
+  if (this->baselineChem.size() != 6) {
     if (util::ABMerror(1, "Error initializing chemicals!!", __FILE__, __LINE__))
       exit(1);
     return;
   }
 
-  const int countCaAlg = this->countPatchType(CaAlg);
-  const float tnf0 = this->baselineChem[TNF] / countCaAlg;
-  const float tgf0 = this->baselineChem[TGF] / countCaAlg;
-  const float il10 = this->baselineChem[IL1beta] / countCaAlg;
+  const int countbiomaterial = this->countPatchType(biomaterial);
+  const float tnf0 = this->baselineChem[TNF] / countbiomaterial;
+  const float tgf0 = this->baselineChem[TGF] / countbiomaterial;
+  const float fgf0 = this->baselineChem[FGF] / countbiomaterial;
+  const float il60 = this->baselineChem[IL6] / countbiomaterial;
+  const float il80 = this->baselineChem[IL8] / countbiomaterial;
+  const float il100 = this->baselineChem[IL10] / countbiomaterial;
 
   const int countBoundary =
       nx * ny * nz -
@@ -511,43 +407,49 @@ void BMWorld::initializeChemBaseline() {
   const double volumeBoundary =
       (BMWorld::totalVolumeML / (nx * ny * nz)) / 1000 *
       countBoundary; // volume of all boundary patches in L
-  const double molO2 = this->initialO2 * pow(10, 9) *
-                       volumeBoundary; // total fmol of O2 needed to distribute
-                                       // across all boundary patches
+  // const double molO2 = this->initialO2 * pow(10, 9) *
+  //                      volumeBoundary; // total fmol of O2 needed to distribute
+  //                                      // across all boundary patches
 
   // debug
   cout << " Number of boundary patches = " << countBoundary << endl;
   cout << " Total volume of boundary patches = " << volumeBoundary << endl;
-  cout << " Total fmol of O2 for boundary patches = " << molO2 << endl;
+  // cout << " Total fmol of O2 for boundary patches = " << molO2 << endl;
 
-  // TO-DO: move setting of O2 baseline to chem config
-  this->baselineChem[o2] = molO2; // manually set baseline O2
+  // // TO-DO: move setting of O2 baseline to chem config
+  // this->baselineChem[o2] = molO2; // manually set baseline O2
 
-  const float o20 = this->baselineChem[o2] / countBoundary;
+  // const float o20 = this->baselineChem[o2] / countBoundary;
 
   for (int iz = 0; iz < this->nz; iz++) {
 #pragma omp parallel for
     for (int iy = 0; iy < this->ny; iy++) {
       for (int ix = 0; ix < this->nx; ix++) {
         const int in = ix + iy * nx + iz * nx * ny;
-        if (this->worldPatch[in].type[read_t] == CaAlg) {
+        if (this->worldPatch[in].type[read_t] == biomaterial) {
           chemical_environment_->set_concentration(in, TNF, tnf0);
           chemical_environment_->set_concentration(in, TGF, tgf0);
-          chemical_environment_->set_concentration(in, IL1beta, il10);
+          chemical_environment_->set_concentration(in, FGF, fgf0);
+          chemical_environment_->set_concentration(in, IL6, il60);
+          chemical_environment_->set_concentration(in, IL8, il80);
+          chemical_environment_->set_concentration(in, IL10, il100);
         } else {
           chemical_environment_->set_concentration(in, TNF, 0.f);
           chemical_environment_->set_concentration(in, TGF, 0.f);
-          chemical_environment_->set_concentration(in, IL1beta, 0.f);
+          chemical_environment_->set_concentration(in, FGF, 0.f);
+          chemical_environment_->set_concentration(in, IL6, 0.f);
+          chemical_environment_->set_concentration(in, IL8, 0.f);
+          chemical_environment_->set_concentration(in, IL10, 0.f);
         }
 
-        // set O2 separately only on boundary patches
-        bool isBoundary = (ix == 0 || ix == nx - 1 || iy == 0 || iy == ny - 1 ||
-                           iz == 0 || iz == nz - 1);
-        if (isBoundary) {
-          chemical_environment_->set_concentration(in, o2, o20);
-        } else {
-          chemical_environment_->set_concentration(in, o2, 0.f);
-        }
+        // // set O2 separately only on boundary patches
+        // bool isBoundary = (ix == 0 || ix == nx - 1 || iy == 0 || iy == ny - 1 ||
+        //                    iz == 0 || iz == nz - 1);
+        // if (isBoundary) {
+        //   chemical_environment_->set_concentration(in, o2, o20);
+        // } else {
+        //   chemical_environment_->set_concentration(in, o2, 0.f);
+        // }
       }
     }
   }
@@ -557,128 +459,64 @@ void BMWorld::initializeChemBaseline() {
 
   cout << "		Initial cytokine concentrations: totalTNF = "
        << this->world_total_tnf() << ", totalTGF = " << this->world_total_tgf()
-       << ", totalIL1beta = " << this->world_total_il1beta()
-       << ", totalO2 = " << this->world_total_o2() << endl;
+       << ", totalFGF = " << this->world_total_fgf()
+       << ", totalIL6 = " << this->world_total_il6()
+       << ", totalIL8 = " << this->world_total_il8()
+       << ", totalIL10 = " << this->world_total_il10()
+       << endl;
 }
 
 void BMWorld::initializeCells() {
-  // cout << "Begin Initializing Cells..." << endl;
+  cells = ArrayChain<Cell *>(DEFAULT_DATA_SMALL, 4, NULL, NULL);
 
-  // Instantiate Cell list:
-  cells = ArrayChain<Cell *>(DEFAULT_DATA_SMALL, 4, NULL,
-                             NULL); // BMWorld::destroyChond);
-  // cout << "Initialize Cells..." << endl;
+  /* Manuscript Table 1: 50 000 fibroblast agents. A count of 0 falls back to
+   * the in vitro seeding density of 1e6 cells/mL (Section 2.2.3). */
+  int seedCount = this->initialCells[0];
+  if (seedCount <= 0)
+    seedCount = static_cast<int>(1.0e6 * BMWorld::totalVolumeML);
 
-  // If initial cell count not input, seed scaffold with stem cells at density
-  // 10^6 cell/mL
-  double cellDensity; // cells/mm^3
-  double scaffoldVolume = (nx * ny * nz) * pow(this->patchlength, 3); // mm^3
-  double hydrogelVolume = scaffoldVolume * pow(10, -3);               // mL
+  const int available = this->countPatchType(biomaterial);
+  if (seedCount > available) seedCount = available;
+  this->initialCells[0] = seedCount;
 
-  if (this->initialCells[0] == 0) {
-    double cellpermL = 1 * pow(10, 6);     // (Xuan Li) 1 mill/ml
-    cellDensity = cellpermL * pow(10, -3); // cells/mm^3
-  } else {
-    double cellpermL = this->initialCells[0] / scaffoldVolume;
-    cellDensity = cellpermL * pow(10, -3);
-  }
+  cout << "Construct volume: " << BMWorld::totalVolumeML << " mL" << endl;
+  cout << "Seeding " << seedCount << " fibroblasts ("
+       << (seedCount / BMWorld::totalVolumeML) << " cells/mL)" << endl;
 
-  this->initialCells[0] = cellDensity * scaffoldVolume;
-  int initialScaffoldCells = this->initialCells[0];
-
-  cout << "		Scaffold Volume: " << scaffoldVolume << " mm^3 ("
-       << hydrogelVolume << " mL)" << endl;
-  cout << "		Cell Density: " << cellDensity << " cells/mm^3  ("
-       << 1.0 * pow(10, 6) << " cells/mL)" << endl;
-  cout << " 		Seeding " << initialScaffoldCells
-       << " cells in scaffold " << endl;
-
-  BMWorld::totalVolumeML = hydrogelVolume;
-
-  // Sprout cell seeded hydrogel with mesenchymal stem cells at density 10^6
-  // cells/mL
-  sproutAgent(initialScaffoldCells, // Number of cells to sprout
-              CaAlg,                // Type of patch to sprout on
-              stem,                 // Type of agent to sprout
-              // Physical Boundary:
-              0,  //  -- left
-              nx, //  -- right
-              0,  //  -- top
-              ny, //  -- bottom
-              0,  //  -- front
-              nz  //  -- rear
-  );
-  prevCells = this->initialCells[0];
-  // cout << "Finished initializing cells" << endl;
+  sproutAgent(seedCount, biomaterial, fibroblast, 0, nx, 0, ny, 0, nz);
+  BMWorld::prevCells = seedCount;
 }
+
 
 void BMWorld::initializeECM() {
+  /* Manuscript Table 2: Col, Eln, HA and HA_f are per-patch state variables.
+   * Day-0 values are a measured calibration initial condition (Section 2.2.5),
+   * not something the model generates. */
+  const int totalPatches = nx * ny * nz;
 
-  /* --------------------------------------------------------------------------
-   */
-  /*                                  COLLAGEN */
-  /* --------------------------------------------------------------------------
-   */
-  // cout << "Begin Initializing Collagen..." << endl;
-  sproutAgentInArea(nx * ny * nz, // Number of agents to sprout
-                    CaAlg,        // patch type
-                    new_coll,     // new collagen agent type
-                    0,  // lowest x-coordinate agent could be sprouted at
-                    nx, // highest x-coordinate agent
-                    0,  // lowest y-coordinate
-                    ny, // highest y-coordinate
-                    0,  // lowest z-coordinate
-                    nz  // highest z-coordinate
-  );                    // collagen in CaAlg Scaffold
+  const float col0 = static_cast<float>(this->initialCollagenPerPatch);
+  const float eln0 = static_cast<float>(this->initialElastinPerPatch);
+  const float ha0  = static_cast<float>(this->initialHAPerPatch);
 
-  /* --------------------------------------------------------------------------
-   */
-  /*                                  AGGRECAN */
-  /* --------------------------------------------------------------------------
-   */
-  // cout << "Begin Initializing Aggrecan..." << endl;
-  sproutAgentInArea(nx * ny * nz, // Number of agents to sprout
-                    CaAlg,        // patch type
-                    new_agg,      // new aggrecan agent type
-                    0,  // lowest x-coordinate agent could be sprouted at
-                    nx, // highest x-coordinate agent
-                    0,  // lowest y-coordinate
-                    ny, // highest y-coordinate
-                    0,  // lowest z-coordinate
-                    nz  // highest z-coordinate
-  );                    // aggrecan in CaAlg Scaffold
-}
-
-void BMWorld::initializeDamage() {
-  // Sprout Damage throughout Scaffold and fragment ECM proteins
-  for (int iz = 0; iz < nz; iz++) {
-    for (int iy = 0; iy < ny; iy++) {
-      for (int ix = 0; ix < nx; ix++) {
-        int in = ix + iy * nx + iz * nx * ny;
-        worldPatch[in].inDamzone = true;
-        worldPatch[in].health[write_t] = 0;
-        worldPatch[in].damage[write_t] = worldPatch[in].damage[read_t]++;
-        worldPatch[in].dirty = true;
-
-        if (worldECM[in].empty[write_t] == true)
-          continue;
-        this->worldECM[in].fragmentNCollagen();
-        this->worldECM[in].fragmentNAggrecan();
-        worldPatch[in].updatePatch();
-      }
-    }
+  for (int in = 0; in < totalPatches; in++) {
+    this->worldECM[in].ncollagen[read_t]  = col0;
+    this->worldECM[in].ncollagen[write_t] = col0;
+    this->worldECM[in].nelastin[read_t]   = eln0;
+    this->worldECM[in].nelastin[write_t]  = eln0;
+    this->worldECM[in].HA[read_t]         = ha0;
+    this->worldECM[in].HA[write_t]        = ha0;
+    this->worldECM[in].fHA[read_t]        = 0.f;
+    this->worldECM[in].fHA[write_t]       = 0.f;
+    this->worldECM[in].isEmpty();
   }
-  // cout <<  this->countPatchType(damage) << " damage created" << endl;
+
+  cout << "Initial ECM per patch (ug): collagen " << col0 << ", elastin " << eln0
+       << ", HA " << ha0 << "  -> construct totals (ug): "
+       << static_cast<double>(col0) * totalPatches << ", "
+       << static_cast<double>(eln0) * totalPatches << ", "
+       << static_cast<double>(ha0) * totalPatches << endl;
 }
 
-/*
- * Each call to BMWorld::go() performs the following major steps:
- * 	(0) Cell seedings
- * 	(1) Chemical diffusion - diffuseCytokines(): PDE step; writes increment
- * to d* (2) Cell function       - cells may add secretion into d* (3) ECM
- * function (4) Attributes synchronization a) Update chemicals - updateChem():
- * p* += d*, clear d* b) Update cells c) Update ECM managers d) Update patches
- */
 int BMWorld::go() {
   cout << "-------------------------------------------" << endl;
 
@@ -752,7 +590,7 @@ int BMWorld::go() {
   this->requestECMfragments();
 
 #ifdef MODEL_SCAFFOLD
-  /* ------------------------- UPDATE CaAlg Properties ------------------------
+  /* ------------------------- UPDATE biomaterial Properties ------------------------
    */
   this->updateSwellingRatio();
   this->updateMassLoss();
@@ -801,16 +639,17 @@ float BMWorld::world_total_tgf() const {
   return 0.f;
 }
 
-float BMWorld::world_total_il1beta() const {
-  if (chemical_environment_)
-    return chemical_environment_->total_il1beta();
-  return 0.f;
+float BMWorld::world_total_fgf() const {
+  return chemical_environment_ ? chemical_environment_->total_fgf() : 0.f;
 }
-
-float BMWorld::world_total_o2() const {
-  if (chemical_environment_)
-    return chemical_environment_->total_o2();
-  return 0.f;
+float BMWorld::world_total_il6() const {
+  return chemical_environment_ ? chemical_environment_->total_il6() : 0.f;
+}
+float BMWorld::world_total_il8() const {
+  return chemical_environment_ ? chemical_environment_->total_il8() : 0.f;
+}
+float BMWorld::world_total_il10() const {
+  return chemical_environment_ ? chemical_environment_->total_il10() : 0.f;
 }
 
 double BMWorld::tick_interval_minutes() const {
@@ -883,77 +722,76 @@ void BMWorld::executeECMs() {
 }
 
 void BMWorld::requestECMfragments() {
-  if (BMWorld::highTNFdamage == true) {
-    cout << " high TNF damage " << endl;
-    BMWorld::highTNFdamage = false;
-    for (int in = 0; in < (nx - 1) + (ny - 1) * nx + (nz - 1) * nx * ny; in++) {
-#ifndef CALIBRATION
-      if (this->chem_concentration(TNF, in) > 10.f) {
-#else
-      if (this->chem_concentration(TNF, in) > 10.f) {
-#endif
-        cout << " Degrade ECM " << endl;
-        this->worldECM[in].fragmentNCollagen();
-        this->worldECM[in].fragmentNAggrecan();
-      }
-    }
-  }
+//   if (BMWorld::highTNFdamage == true) {
+//     cout << " high TNF damage " << endl;
+//     BMWorld::highTNFdamage = false;
+//     for (int in = 0; in < (nx - 1) + (ny - 1) * nx + (nz - 1) * nx * ny; in++) {
+// #ifndef CALIBRATION
+//       if (this->chem_concentration(TNF, in) > 10.f) {
+// #else
+//       if (this->chem_concentration(TNF, in) > 10.f) {
+// #endif
+//         cout << " Degrade ECM " << endl;
+//         this->worldECM[in].fragmentNCollagen();
+//       }
+//     }
+//   }
 }
 
-void BMWorld::updateO2() {
-  // TO-DO: move this O2 boundary update to somewhere within the chem
-  // environment, not directly in BMWorld
-  const int countBoundary =
-      nx * ny * nz -
-      (nx - 2) * (ny - 2) *
-          (nz - 2); // boundary patches = all patches - interior patches
-  const double volumeBoundary =
-      (BMWorld::totalVolumeML / (nx * ny * nz)) / 1000 *
-      countBoundary; // volume of all boundary patches in L
-  const double molO2 = this->initialO2 * pow(10, 9) *
-                       volumeBoundary; // total fmol of O2 needed to distribute
-                                       // across all boundary patches
-  const double incrO2 =
-      this->incrementO2 *
-      (molO2 / countBoundary); // oxygen increment for each patch
+// void BMWorld::updateO2() {
+//   // TO-DO: move this O2 boundary update to somewhere within the chem
+//   // environment, not directly in BMWorld
+//   const int countBoundary =
+//       nx * ny * nz -
+//       (nx - 2) * (ny - 2) *
+//           (nz - 2); // boundary patches = all patches - interior patches
+//   const double volumeBoundary =
+//       (BMWorld::totalVolumeML / (nx * ny * nz)) / 1000 *
+//       countBoundary; // volume of all boundary patches in L
+//   const double molO2 = this->initialO2 * pow(10, 9) *
+//                        volumeBoundary; // total fmol of O2 needed to distribute
+//                                        // across all boundary patches
+//   const double incrO2 =
+//       this->incrementO2 *
+//       (molO2 / countBoundary); // oxygen increment for each patch
 
-  // update boundary O2 across Z faces
-  for (int zi : {0, nz - 1}) {
-#pragma omp parallel for
-    for (int yi = 0; yi < ny; yi++) {
-#pragma omp simd
-      for (int xi = 0; xi < nx; xi++) {
-        int in = xi + yi * nx + zi * nx * ny;
-        chemical_environment_->accumulate_secretion(in, o2, incrO2);
-      }
-    }
-  }
+//   // update boundary O2 across Z faces
+//   for (int zi : {0, nz - 1}) {
+// #pragma omp parallel for
+//     for (int yi = 0; yi < ny; yi++) {
+// #pragma omp simd
+//       for (int xi = 0; xi < nx; xi++) {
+//         int in = xi + yi * nx + zi * nx * ny;
+//         chemical_environment_->accumulate_secretion(in, o2, incrO2);
+//       }
+//     }
+//   }
 
-  // update boundary O2 across Y faces
-  for (int yi : {0, ny - 1}) {
-#pragma omp parallel for
-    for (int zi = 1; zi < nz - 1; zi++) {
-      // zi starts at 1 and ends at nz-2 to exclude patches
-      // already counted by the Z face loops above
-#pragma omp simd
-      for (int xi = 0; xi < nx; xi++) {
-        int in = xi + yi * nx + zi * nx * ny;
-        chemical_environment_->accumulate_secretion(in, o2, incrO2);
-      }
-    }
-  }
+//   // update boundary O2 across Y faces
+//   for (int yi : {0, ny - 1}) {
+// #pragma omp parallel for
+//     for (int zi = 1; zi < nz - 1; zi++) {
+//       // zi starts at 1 and ends at nz-2 to exclude patches
+//       // already counted by the Z face loops above
+// #pragma omp simd
+//       for (int xi = 0; xi < nx; xi++) {
+//         int in = xi + yi * nx + zi * nx * ny;
+//         chemical_environment_->accumulate_secretion(in, o2, incrO2);
+//       }
+//     }
+//   }
 
-  // update boundary O2 across X faces
-  for (int xi : {0, nx - 1}) {
-#pragma omp parallel for
-    for (int zi = 1; zi < nz - 1; zi++) {
-      for (int yi = 1; yi < ny - 1; yi++) {
-        int in = xi + yi * nx + zi * nx * ny;
-        chemical_environment_->accumulate_secretion(in, o2, incrO2);
-      }
-    }
-  }
-}
+//   // update boundary O2 across X faces
+//   for (int xi : {0, nx - 1}) {
+// #pragma omp parallel for
+//     for (int zi = 1; zi < nz - 1; zi++) {
+//       for (int yi = 1; yi < ny - 1; yi++) {
+//         int in = xi + yi * nx + zi * nx * ny;
+//         chemical_environment_->accumulate_secretion(in, o2, incrO2);
+//       }
+//     }
+//   }
+// }
 
 void BMWorld::updateChemCPU() {
   if (!chemical_environment_)
@@ -966,11 +804,11 @@ void BMWorld::updateChemCPU() {
     tgfLine[xi] = chemical_environment_->concentration_at(in, TGF);
   }
 
-  // temp for O2 output for diffusion debugging
-  for (int xi = 0; xi < nx / 2; xi++) {
-    int in = xi + lineY * nx + lineZ * nx * ny;
-    o2Line[xi] = chemical_environment_->concentration_at(in, o2);
-  }
+  // // temp for O2 output for diffusion debugging
+  // for (int xi = 0; xi < nx / 2; xi++) {
+  //   int in = xi + lineY * nx + lineZ * nx * ny;
+  //   o2Line[xi] = chemical_environment_->concentration_at(in, o2);
+  // }
 }
 
 void BMWorld::updateChem() { updateChemCPU(); }
@@ -1045,13 +883,9 @@ void BMWorld::updateCells() {
       // Update cell stage counts
       /* Added by MM to check types of cell stages and add to respective
        * counters: */
-      if (typeid(*cell) == typeid(Stem)) {
-        Stem::numOfStem++;
-      } else if (typeid(*cell) == typeid(Progen)) {
-        Progen::numOfProgen++;
-      } else if (typeid(*cell) == typeid(NP)) {
-        NP::numOfNP++;
-      }
+      if (typeid(*cell) == typeid(Fibroblast)) {
+        Fibroblast::numOfFibroblast++;
+      } 
 
       // Remove dead cells
     } else if (cell->isAlive() == false) {
@@ -1062,13 +896,9 @@ void BMWorld::updateCells() {
       this->worldPatch[in].dirty = true;
       /* Added by MM to check types of cell stages and subtract from respective
        * counters: */
-      if (typeid(*cell) == typeid(Stem)) {
-        Stem::numOfStem--;
-      } else if (typeid(*cell) == typeid(Progen)) {
-        Progen::numOfProgen--;
-      } else if (typeid(*cell) == typeid(NP)) {
-        NP::numOfNP--;
-      }
+      if (typeid(*cell) == typeid(Fibroblast)) {
+        Fibroblast::numOfFibroblast--;
+      } 
       cells.deleteData(i, tid);
       delete cell;
       deletedCells++;
@@ -1139,7 +969,7 @@ void BMWorld::sproutAgent(int num, int patchType, int agentType, int xmin,
       zmax != nz)
     sproutAgentInArea(num, patchType, agentType, xmin, xmax, ymin, ymax, zmin,
                       zmax);
-  else if (patchType == CaAlg)
+  else if (patchType == biomaterial)
     sproutAgentInArea(num, patchType, agentType, xmin, xmax, ymin, ymax, zmin,
                       zmax);
   else
@@ -1195,114 +1025,46 @@ void BMWorld::sproutAgentInArea(int num, int patchType, int agentType, int xmin,
     if (in < 0 || in > (nx - 1) + (ny - 1) * nx + (nz - 1) * nx * ny)
       continue;
     switch (agentType) {
-    case stem: {
-      // cout << "new stem added" << endl; //added for debugging
+    case fibroblast: {
+      // cout << "new fibroblast added" << endl; //added for debugging
       tempPatchPtr = &(this->worldPatch[in]);
-      // std::shared_ptr<Cell> cell = std::make_shared<Stem>(tempPatchPtr);
-      Stem *newStem = new Stem(tempPatchPtr);
+      // std::shared_ptr<Cell> cell = std::make_shared<Fibroblast>(tempPatchPtr);
+      Fibroblast *newFibroblast = new Fibroblast(tempPatchPtr);
 #ifdef _OMP
       int tid = omp_get_thread_num();
-      this->localNewCells[tid]->push_back(newStem);
+      this->localNewCells[tid]->push_back(newFibroblast);
 #else
-      if (!this->cells.addData(newStem, DEFAULT_TID)) {
-        cerr << "Error: Could not add stem cell in sproutAgent()" << endl;
+      if (!this->cells.addData(newFibroblast, DEFAULT_TID)) {
+        cerr << "Error: Could not add fibroblast cell in sproutAgent()" << endl;
         exit(-1);
       }
 #endif
       ///* Added by MM to check types of cell stages and add to respective
       /// counters: */
-      // if (typeid(*this) == typeid(Stem)) {
-      //	Stem::numOfStem++;
+      // if (typeid(*this) == typeid(Fibroblast)) {
+      //	Fibroblast::numOfFibroblast++;
       // }
       // Cell::numOfCells++;
 
       this->worldPatch[in].setOccupied();
-      this->worldPatch[in].occupiedby[write_t] = stem;
+      this->worldPatch[in].occupiedby[write_t] = fibroblast;
       this->worldPatch[in].dirty = true;
       // cout << "patch index " << in << endl; //added for debugging
 
       break;
     }
-    case progen: {
-      // cout << "new progen added" << endl; //added for debugging
-      tempPatchPtr = &(this->worldPatch[in]);
-      // std::shared_ptr<Cell> cell = std::make_shared<Progen>(tempPatchPtr);
-      Progen *newProgen = new Progen(tempPatchPtr);
-#ifdef _OMP
-      int tid = omp_get_thread_num();
-      this->localNewCells[tid]->push_back(newProgen);
-#else
-      if (!this->cells.addData(newProgen, DEFAULT_TID)) {
-        cerr << "Error: Could not add pre-np cell in sproutAgent()" << endl;
-        exit(-1);
-      }
-#endif
-      ///* Added by MM to check types of cell stages and add to respective
-      /// counters: */
-      // if (typeid(*this) == typeid(Progen)) {
-      //	Progen::numOfProgen++;
-      // }
-      // Cell::numOfCells++;
-
-      this->worldPatch[in].setOccupied();
-      this->worldPatch[in].occupiedby[write_t] = progen;
-      this->worldPatch[in].dirty = true;
-
-      break;
-    }
-    case np: {
-      // cout << "new np added" << endl; //added for debugging
-      tempPatchPtr = &(this->worldPatch[in]);
-      // std::shared_ptr<Cell> cell = std::make_shared<NP>(tempPatchPtr);
-      NP *newNP = new NP(tempPatchPtr);
-#ifdef _OMP
-      int tid = omp_get_thread_num();
-      this->localNewCells[tid]->push_back(newNP);
-#else
-      if (!this->cells.addData(newNP, DEFAULT_TID)) {
-        cerr << "Error: Could not add np cell in sproutAgent()" << endl;
-        exit(-1);
-      }
-#endif
-      ///* Added by MM to check types of cell stages and add to respective
-      /// counters: */
-      // if (typeid(*this) == typeid(NP)) {
-      //	NP::numOfNP++;
-      // }
-      // Cell::numOfCells++;
-
-      this->worldPatch[in].setOccupied();
-      this->worldPatch[in].occupiedby[write_t] = np;
-      this->worldPatch[in].dirty = true;
-
-      break;
-    }
-    case orig_coll: {
-      this->worldECM[in].ocollagen[write_t] =
-          this->worldECM[in].ocollagen[read_t] + 1;
-      this->worldECM[in].dirty = true;
-      this->worldECM[in].isEmpty();
-      break;
-    }
-    case orig_agg: {
-      this->worldECM[in].oaggrecan[write_t] =
-          this->worldECM[in].oaggrecan[read_t] + 1;
-      this->worldECM[in].dirty = true;
-      this->worldECM[in].isEmpty();
-      break;
-    }
+    
+    // case orig_coll: {
+    //   this->worldECM[in].ocollagen[write_t] =
+    //       this->worldECM[in].ocollagen[read_t] + 1;
+    //   this->worldECM[in].dirty = true;
+    //   this->worldECM[in].isEmpty();
+    //   break;
+    // }
     case new_coll: {
       this->worldPatch[in].initcollagen = true;
       this->worldECM[in].ncollagen[write_t] =
           this->worldECM[in].ncollagen[read_t] + 1;
-      this->worldECM[in].dirty = true;
-      this->worldECM[in].isEmpty();
-      break;
-    }
-    case new_agg: {
-      this->worldPatch[in].initaggrecan = true;
-      this->worldECM[in].naggrecan[write_t] =
-          this->worldECM[in].naggrecan[read_t] + 1;
       this->worldECM[in].dirty = true;
       this->worldECM[in].isEmpty();
       break;
@@ -1349,60 +1111,25 @@ void BMWorld::sproutAgentInWorld(int num, int patchType,
           reservoir[i] > (nx - 1) + (ny - 1) * nx + (nz - 1) * nx * ny)
         continue;
       switch (agentType) {
-      case stem: {
+      case fibroblast: {
         tempPatchPtr = &(this->worldPatch[reservoir[i]]);
-        Stem *newStem = new Stem(tempPatchPtr);
+        Fibroblast *newFibroblast = new Fibroblast(tempPatchPtr);
 #ifdef _OMP
         int tid = omp_get_thread_num();
-        this->localNewCells[tid]->push_back(newStem);
+        this->localNewCells[tid]->push_back(newFibroblast);
 #else
-        if (!this->cells.addData(newStem, DEFAULT_TID)) {
-          cerr << "Error: Could not add stem cell in sproutAgentInWorld()"
+        if (!this->cells.addData(newFibroblast, DEFAULT_TID)) {
+          cerr << "Error: Could not add fibroblast cell in sproutAgentInWorld()"
                << endl;
           exit(-1);
         }
 #endif
         // this->worldPatch[reservoir[i]].occupied = true;
         this->worldPatch[reservoir[i]].setOccupied();
-        this->worldPatch[reservoir[i]].occupiedby = stem;
+        this->worldPatch[reservoir[i]].occupiedby = fibroblast;
         break;
       }
-      case progen: {
-        tempPatchPtr = &(this->worldPatch[reservoir[i]]);
-        Progen *newProgen = new Progen(tempPatchPtr);
-#ifdef _OMP
-        int tid = omp_get_thread_num();
-        this->localNewCells[tid]->push_back(newProgen);
-#else
-        if (!this->cells.addData(newProgen, DEFAULT_TID)) {
-          cerr << "Error: Could not add pre-np cell in sproutAgentInWorld()"
-               << endl;
-          exit(-1);
-        }
-#endif
-        // this->worldPatch[reservoir[i]].occupied = true;
-        this->worldPatch[reservoir[i]].setOccupied();
-        this->worldPatch[reservoir[i]].occupiedby = progen;
-        break;
-      }
-      case np: {
-        tempPatchPtr = &(this->worldPatch[reservoir[i]]);
-        NP *newNP = new NP(tempPatchPtr);
-#ifdef _OMP
-        int tid = omp_get_thread_num();
-        this->localNewCells[tid]->push_back(newNP);
-#else
-        if (!this->cells.addData(newNP, DEFAULT_TID)) {
-          cerr << "Error: Could not add np cell in sproutAgentInWorld()"
-               << endl;
-          exit(-1);
-        }
-#endif
-        // this->worldPatch[reservoir[i]].occupied = true;
-        this->worldPatch[reservoir[i]].setOccupied();
-        this->worldPatch[reservoir[i]].occupiedby = np;
-        break;
-      }
+      
       }
     }
     delete[] reservoir;
@@ -1411,7 +1138,7 @@ void BMWorld::sproutAgentInWorld(int num, int patchType,
 #endif // OPT_CELL_SEEDING
 
   int BMWorld::countPatchType(int whichType) {
-    if (whichType == CaAlg) {
+    if (whichType == biomaterial) {
       Patch::numOfEachTypes[whichType] = 0;
       for (int iz = 0; iz < this->nz; iz++) {
         int currCount = 0;
@@ -1477,101 +1204,65 @@ void BMWorld::sproutAgentInWorld(int num, int patchType,
   }
 
 #ifdef MODEL_SCAFFOLD
+  /* Table 4: Q = (c9 HAww + c10) ln(t_m) + c11 HAww + c12   [% w/w] */
   void BMWorld::updateSwellingRatio() {
-    float Alg_ww = this->Alg_wv / (this->Alg_wv);
     double tmin = reportMinute();
+    if (tmin < 1.0) tmin = 1.0;               // ln(t) domain guard
 
-/* Calculate Swelling Ratio (Q) given Alg concentration (% w/w) at a given time
- * (in minutes) Q = (a * Alg_ww +  b) * t_min + (c * Alg_ww + d)
- *
- *       Swelling ratio favorable for cell adhesion, growth, diffusion of
- * nutrients Depends on Alg content (% w/w) Rapid swelling in initial 10 min,
- * with slight increase until ~24h
- */
-#ifdef CALIBRATION
-    // this->Q = (this->SwellRatio[0]*Alg_ww + this->SwellRatio[1])*log(tmin) +
-    // (this->SwellRatio[2]*Alg_ww + this->SwellRatio[3]); old
-    BMWorld::SwellRatio[BMWorld::SWELL_BASELINE] - BMWorld::SwellRatio[BMWorld::SWELL_TIME_EFFECT] * (this->reportDay()) -
-        BMWorld::SwellRatio[BMWorld::SWELL_ALGINATE_CONCENTRATION_EFFECT] * (this->Alg_wv) -
-        BMWorld::SwellRatio[BMWorld::SWELL_TIME_CROSSLINKER_INTERACTION] * (this->reportDay()) * (this->pXL) +
-        BMWorld::SwellRatio[BMWorld::SWELL_ALGINATE_CROSSLINKER_INTERACTION] * (this->Alg_wv) * (this->pXL);
-#else
-    this->Q = (0.4 * Alg_ww + 0.4) * log(tmin) + (3 * Alg_ww + 7.9);
-#endif
-    /* Swelling reduces effective diffusivity: D_eff = base_D * Q in
-     * SpeciesRegistry. */
-    if (this->Q > 0.0f && chemical_environment_)
-      chemical_environment_->set_swelling_ratio(static_cast<double>(this->Q));
-    if (this->E > 0.0f && chemical_environment_)
-      chemical_environment_->set_stiffness(static_cast<double>(this->E));
-    // this->Q=0;
-    // cout << " this->Q =" << (this->SwellRatio[0]<<"*"<<Alg_ww<< " + "<<
-    // this->SwellRatio[1])<<"*log("<<tmin<<") +
-    // ("<<this->SwellRatio[2]<<"*"<<Alg_ww<< " + "<<this->SwellRatio[3]<<")" <<
-    // endl; cout << " Swelling Ratio: " << this->Q << endl;
-  }
+    BMWorld::Q = (BMWorld::SwellRatio[SWELL_HA_TIME_EFFECT] * BMWorld::HAww   // c9
+                  + BMWorld::SwellRatio[SWELL_TIME_EFFECT])                   // c10
+                     * static_cast<float>(log(tmin))
+                 + BMWorld::SwellRatio[SWELL_HA_EFFECT] * BMWorld::HAww       // c11
+                 + BMWorld::SwellRatio[SWELL_BASELINE];                       // c12
 
-  void BMWorld::updateMassLoss() {
-    float Alg_ww = this->Alg_wv / (this->Alg_wv);
-    float tweek = reportDay() / 7;
-    float w_t;
-
-/* Calculate Mass Loss (w_t) of gel with given Alg concentration (% w/w) at
- * current time (in weeks) w_t = (a * Alg_ww +  b) * t_weeks + (c * Alg_ww + d)
- *
- *       Degree of dregradation depends greatly on Alg (% w/w) content
- *       Highest weight loss percentage occurs during first week in vitro, with
- * little weight loss over next 3 weeks
- */
-#ifdef CALIBRATION
-    w_t = this->MassLoss[BMWorld::MASSLOSS_BASELINE] + this->MassLoss[BMWorld::MASSLOSS_CROSSLINKER_EFFECT] * (pXL) +
-          this->MassLoss[BMWorld::MASSLOSS_TIME_EFFECT] * (reportDay()) -
-          this->MassLoss[BMWorld::MASSLOSS_CROSSLINKER_TIME_INTERACTION] * (pXL) * (reportDay());
-#else
-    w_t =
-        0.234 + 7.785 * (pXL) + 0.15 * (reportDay()) -
-        1.36 * (pXL) *
-            (reportDay()); //(17.6*Alg_ww - 0.9)*log(tweek) + (60*Alg_ww + 5.3);
-#endif
-    if (w_t < 0)
-      w_t = 0; // no negative mass loss
-
-    // If there is % mass loss since last call, "degrade" % CaAlg patches and
-    // replace with tissue
-    if (w_t > this->w) {
-      float changeInPatches = (0.01) * (w_t - this->w) * BMWorld::initialCaAlg;
-      this->degradeCaAlg(changeInPatches);
-    }
-
-    this->w = w_t;
-    // cout << " w_t = "<<this->MassLoss[0]<<" + "<<
-    // this->MassLoss[1]<<"*"<<(pXL)<<" +
-    // "<<this->MassLoss[2]<<"*"<<(reportDay()) <<" - "
-    // <<this->MassLoss[3]<<"*"<<(pXL)<<"*"<<(reportDay()) << endl; cout << "
-    // Mass Loss (%): " << this->w << endl; cout << " Number of Ca-Alg patches:
-    // " << this->countPatchType(CaAlg) << endl;
-  }
-#ifdef PEPTIDE_BM
-  void BMWorld::updateE() {
-    BMWorld::E =
-        BMWorld::E_inf + (BMWorld::E_0 - BMWorld::E_inf) *
-                             exp(-(BMWorld::clock * 30 * 60) /
-                                 BMWorld::t); // converts tick to seconds
+    /* Swelling reduces effective diffusivity: D_eff = base_D * Q. */
+    if (BMWorld::Q > 0.0f && chemical_environment_)
+      chemical_environment_->set_swelling_ratio(static_cast<double>(BMWorld::Q));
     if (BMWorld::E > 0.0f && chemical_environment_)
       chemical_environment_->set_stiffness(static_cast<double>(BMWorld::E));
   }
-#endif // PEPTIDE_BM
+
+  /* Table 4: w_l = (c13 HAww - c14) t_w + c15 HAww + c16   [%] */
+  void BMWorld::updateMassLoss() {
+    const float tweek = static_cast<float>(reportDay()) / 7.f;
+
+    float w_t = (BMWorld::MassLoss[MASSLOSS_HA_TIME_EFFECT] * BMWorld::HAww    // c13
+                 - BMWorld::MassLoss[MASSLOSS_TIME_EFFECT])                    // c14
+                    * tweek
+                + BMWorld::MassLoss[MASSLOSS_HA_EFFECT] * BMWorld::HAww        // c15
+                + BMWorld::MassLoss[MASSLOSS_BASELINE];                        // c16
+
+    if (w_t < 0.f) w_t = 0.f;
+
+    /* Degrade the corresponding fraction of biomaterial patches. */
+    if (w_t > BMWorld::massLoss) {
+      const float changeInPatches =
+          0.01f * (w_t - BMWorld::massLoss) * BMWorld::initialPatches;
+      this->degradebiomaterial(static_cast<int>(changeInPatches));
+    }
+    BMWorld::massLoss = w_t;
+  }
+// #ifdef PEPTIDE_BM
+//   void BMWorld::updateE() {
+//     BMWorld::E =
+//         BMWorld::E_inf + (BMWorld::E_0 - BMWorld::E_inf) *
+//                              exp(-(BMWorld::clock * 30 * 60) /
+//                                  BMWorld::t); // converts tick to seconds
+//     if (BMWorld::E > 0.0f && chemical_environment_)
+//       chemical_environment_->set_stiffness(static_cast<double>(BMWorld::E));
+//   }
+// #endif // PEPTIDE_BM
 #endif // MODEL_SCAFFOLD
 
 #ifdef MODEL_SCAFFOLD
-  void BMWorld::degradeCaAlg(int numOfPatches) {
+  void BMWorld::degradebiomaterial(int numOfPatches) {
     int xmin = 0;
     int xmax = nx;
     int ymin = 0;
     int ymax = ny;
     int zmin = 0;
     int zmax = nz;
-    int patchType = CaAlg;
+    int patchType = biomaterial;
     vector<int> patchlist;
     int *reservoir = new int[numOfPatches];
     for (int i = 0; i < numOfPatches; i++)
@@ -1579,7 +1270,7 @@ void BMWorld::sproutAgentInWorld(int num, int patchType,
     int in, agentIndex, max;
     int count = 0;
 
-    // Make list of possible CaAlg Patches to degrade
+    // Make list of possible biomaterial Patches to degrade
     for (int iz = zmin; iz < zmax; iz++) {
       for (int iy = ymin; iy < ymax; iy++) {
         for (int ix = xmin; ix < xmax; ix++) {
@@ -1599,7 +1290,7 @@ void BMWorld::sproutAgentInWorld(int num, int patchType,
     // Choose random patches from patch list
     for (int i = 0; i < numOfPatches; i++) {
       if (patchlist.size() == 0) { // No available patches
-        // cout << " CaAlg degrade error, no available patch within bounds! " <<
+        // cout << " biomaterial degrade error, no available patch within bounds! " <<
         // endl;
         delete[] reservoir;
         return;
@@ -1608,7 +1299,7 @@ void BMWorld::sproutAgentInWorld(int num, int patchType,
       reservoir[i] = patchlist[randnumber]; // Prepare 'num' random patches
     }
 
-    // Degrade 'numOfPatches" number of CaAlg patches in reservoir list
+    // Degrade 'numOfPatches" number of biomaterial patches in reservoir list
     for (int i = 0; i < numOfPatches; i++) {
       int in = reservoir[i];
       if (in < 0 || in > (nx - 1) + (ny - 1) * nx + (nz - 1) * nx * ny)
@@ -1625,9 +1316,8 @@ void BMWorld::sproutAgentInWorld(int num, int patchType,
   void BMWorld::debugInfo() {
     int alive = 0;
     int dead = 0;
-    int stemSize = 0;
-    int progenSize = 0;
-    int npSize = 0;
+    int fibroblastSize = 0;
+
     int cellsSize = cells.size();
     for (int i = 0; i < cellsSize; i++) {
       Cell *cell = cells.getDataAt(i);
@@ -1639,25 +1329,19 @@ void BMWorld::sproutAgentInWorld(int num, int patchType,
         alive++;
       }
       // if (cell->activate[read_t] == false) f++;
-      else if (typeid(*cell) == typeid(Stem)) {
-        stemSize++;
-      } else if (typeid(*cell) == typeid(Progen)) {
-        progenSize++;
-      } else if (typeid(*cell) == typeid(NP)) {
-        npSize++;
-      }
+      else if (typeid(*cell) == typeid(Fibroblast)) {
+        fibroblastSize++;
+      } 
       // else af++;
     }
 
-    int numCaAlg = 0;
-    numCaAlg = countPatchType(CaAlg);
-    cout << " total patches: " << numCaAlg << endl;
+    int numbiomaterial = 0;
+    numbiomaterial = countPatchType(biomaterial);
+    cout << " total patches: " << numbiomaterial << endl;
     cout << " alive cells: " << alive << endl;
     cout << " dead cells: " << dead << endl;
     cout << " total cells: " << cells.actualSize() << endl;
-    cout << " stem cells: " << stemSize << endl;
-    cout << " pre-np cells: " << progenSize << endl;
-    cout << " np cells: " << npSize << endl;
+    cout << " fibroblast cells: " << fibroblastSize << endl;
   }
 
   /*
@@ -1705,13 +1389,9 @@ void BMWorld::sproutAgentInWorld(int num, int patchType,
       cell->updateAgent();
       /* Added by MM to check types of cell stages and add to respective
        * counters: */
-      if (typeid(*cell) == typeid(Stem)) {
-        Stem::numOfStem++;
-      } else if (typeid(*cell) == typeid(Progen)) {
-        Progen::numOfProgen++;
-      } else if (typeid(*cell) == typeid(NP)) {
-        NP::numOfNP++;
-      }
+      if (typeid(*cell) == typeid(Fibroblast)) {
+        Fibroblast::numOfFibroblast++;
+      } 
     }
     Cell::numOfCells = cells.actualSize();
   }
@@ -1720,30 +1400,44 @@ void BMWorld::sproutAgentInWorld(int num, int patchType,
     const std::string config_path = util::getSimulationConfigPath();
     const WorldInitParams cfg = load_world_init_config(config_path);
 
-    this->initialCells.assign(1, cfg.msc_count);
-    cout << "Initial MSC seed count: " << this->initialCells[0] << endl;
+    this->initialCells.assign(1, cfg.fibroblast_count);
+    this->initialCollagenPerPatch = cfg.initial_ecm.collagen_per_patch;
+    this->initialElastinPerPatch  = cfg.initial_ecm.elastin_per_patch;
+    this->initialHAPerPatch       = cfg.initial_ecm.ha_per_patch;
 
-    this->Alg_wv = static_cast<float>(cfg.alginate.wv_percent);
-    cout << "Concentration of Alg w/v (%) = " << this->Alg_wv << endl;
+    /* Section 2.2.3: equal-concentration CMHA-S and Gtn-DTPH stocks are mixed
+     * at a volumetric ratio r:1, then PEGDA is added to a final % w/v.
+     * The Table 2 world variables follow from that recipe; keeping the
+     * conversion here means the config never carries a derived quantity. */
+    const double r       = cfg.biomaterial.ha_gtn_ratio;
+    const double ha_wv   = cfg.biomaterial.ha_wv_percent  * (r / (r + 1.0));
+    const double gtn_wv  = cfg.biomaterial.gtn_wv_percent * (1.0 / (r + 1.0));
+    const double tp_wv   = ha_wv + gtn_wv;
+    const double pegda   = cfg.biomaterial.pegda_wv_percent;
 
-    this->highMW_alg = static_cast<float>(cfg.alginate.high_mw_ratio);
-    cout << "Ratio component of high MW alginate (integer) = "
-         << this->highMW_alg << endl;
-
-    this->lowMW_alg = static_cast<float>(cfg.alginate.low_mw_ratio);
-    cout << "Ratio component of low MW alginate (integer) = "
-         << this->lowMW_alg << endl;
-
-    this->pXL = static_cast<float>(cfg.alginate.ca_mm);
-    cout << "Concentration of Ca crosslinker (mM) = " << this->pXL << endl;
-
-#ifdef PEPTIDE_BM
-    this->peptide = cfg.peptide;
-    cout << "Type of peptide conjugation = " << this->peptide << endl;
-#endif // PEPTIDE_BM
+    BMWorld::HAwv = static_cast<float>(ha_wv);
+    BMWorld::TPwv = static_cast<float>(tp_wv);
+    /* HA_ww: HA as a mass fraction of the HA-Gtn polymer. */
+    BMWorld::HAww = static_cast<float>((tp_wv > 0.0) ? ha_wv / tp_wv : 0.0);
+    /* XL_ww: PEGDA as a mass fraction of polymer + crosslinker.
+     * NOTE: this denominator is the open question for Vanderhooft 2009 [63];
+     * if that fit used PEGDA/polymer instead, drop `+ pegda` below. */
+    BMWorld::XLww = static_cast<float>(
+        (tp_wv + pegda > 0.0) ? pegda / (tp_wv + pegda) : 0.0);
+    BMWorld::TDBMR =
+        static_cast<float>(cfg.biomaterial.thiol_double_bond_molar_ratio);
 
     cout << "-------------------------------------------" << endl;
-
+    cout << "Biomaterial composition (Manuscript Table 2 world variables)" << endl;
+    cout << "  Initial fibroblasts             = " << this->initialCells[0] << endl;
+    cout << "  HA : Gtn volumetric ratio       = " << r << " : 1" << endl;
+    cout << "  HA concentration  HAwv  (% w/v) = " << BMWorld::HAwv << endl;
+    cout << "  Gtn concentration       (% w/v) = " << gtn_wv << endl;
+    cout << "  Total polymer     TPwv  (% w/v) = " << BMWorld::TPwv << endl;
+    cout << "  HA fraction       HAww  (w/w)   = " << BMWorld::HAww << endl;
+    cout << "  PEGDA crosslinker XLww  (w/w)   = " << BMWorld::XLww << endl;
+    cout << "  Thiol:double bond TDB_MR        = " << BMWorld::TDBMR << endl;
+    cout << "-------------------------------------------" << endl;
     return 0;
   }
 
@@ -1753,67 +1447,65 @@ void BMWorld::sproutAgentInWorld(int num, int patchType,
   }
 
   vector<string> BMWorld::get_agent_type_names() {
-    return {"Stem", "Progen", "NP"};
+    return {"Fibroblast", "Activated Fibroblast"};
   }
 
-  void BMWorld::count_agent_types(map<string, int> & agent_counts) {
+  void BMWorld::count_agent_types(map<string, int> &agent_counts) {
     int cellsSize = cells.size();
     for (int i = 0; i < cellsSize; i++) {
       Cell *cell = cells.getDataAt(i);
-      if (!cell || !cell->isAlive())
-        continue;
-      if (typeid(*cell) == typeid(Stem))
-        agent_counts["Stem"]++;
-      else if (typeid(*cell) == typeid(Progen))
-        agent_counts["Progen"]++;
-      else if (typeid(*cell) == typeid(NP))
-        agent_counts["NP"]++;
+      if (!cell || !cell->isAlive()) continue;
+      if (cell->isActivated()) agent_counts["Activated Fibroblast"]++;
+      else                     agent_counts["Fibroblast"]++;
     }
   }
 
   int BMWorld::get_total_agent_count() { return cells.actualSize(); }
 
   vector<string> BMWorld::get_env_type_names() {
-    return {"ncollagen", "naggrecan"};
+    return {"ncollagen", "nelastin", "HA", "fHA"};
   }
 
   void BMWorld::count_env(map<string, float> & env_counts) {
     for (int in = 0; in < (nx - 1) + (ny - 1) * nx + (nz - 1) * nx * ny; in++) {
       env_counts["ncollagen"] += this->worldECM[in].ncollagen[read_t];
-      env_counts["naggrecan"] += this->worldECM[in].naggrecan[read_t];
+      env_counts["nelastin"] += this->worldECM[in].nelastin[read_t];
+      env_counts["HA"] += this->worldECM[in].HA[read_t];
+      env_counts["fHA"] += this->worldECM[in].fHA[read_t];
     }
   }
 
   void BMWorld::write_data_row(std::ofstream & file,
-                               std::map<std::string, int> & agent_counts,
-                               std::map<std::string, float> & env_counts) {
+    std::map<std::string, int> & agent_counts,
+    std::map<std::string, float> & env_counts) {
+      /* Cytokines - Manuscript Table 2 */
+      file << this->world_total_tnf()  << "," << this->world_total_tgf()  << ","
+      << this->world_total_fgf()  << "," << this->world_total_il6()  << ","
+      << this->world_total_il8()  << "," << this->world_total_il10() << ",";
 
-    // biomaterial world-specific chemicals
-    file << this->world_total_tnf() << "," << this->world_total_il1beta() << ","
-         << this->world_total_tgf() << "," << this->world_total_o2() << ",";
+      /* ECM - Manuscript Table 2 */
+      file << fixed << setprecision(5)
+      << env_counts["ncollagen"] << "," << env_counts["nelastin"] << ","
+      << env_counts["HA"]        << "," << env_counts["fHA"]      << ",";
 
-    // ecm types
-    file << fixed << setprecision(5) << env_counts["ncollagen"] << ","
-         << env_counts["naggrecan"] << ",";
+      /* Cells */
+      file << get_total_agent_count() << "," << liveCells << "," << deadCells << ","
+      << agent_counts["Fibroblast"] << ","
+      << agent_counts["Activated Fibroblast"] << ",";
 
-    // agent counts
-    file << get_total_agent_count() << "," << agent_counts["Stem"] << ","
-         << agent_counts["Progen"] << "," << agent_counts["NP"] << ","
-         << liveCells << "," << deadCells << ",";
+      /* Scaffold - Manuscript Table 4 */
+      file << BMWorld::E        << "," << BMWorld::Q         << ","
+      << BMWorld::massLoss << "," << BMWorld::pXL       << ","
+      << BMWorld::poreWidth<< "," << BMWorld::meshSize  << ",";
 
-    // viability and differentiation- specific to this biomaterial world
-    float viability = calculate_viability();
-    float perDiff = calculate_pct_differentiated(agent_counts);
+      /* Scaffold composition inputs */
+      file << BMWorld::HAww << "," << BMWorld::HAwv << ","
+      << BMWorld::TPwv << "," << BMWorld::XLww << ",";
 
-    // scaffold-specific columns
-#ifdef MODEL_SCAFFOLD
-    file << this->E << "," << this->Q << "," << this->w << "," << this->Alg_wv
-         << "," << this->Alg_Mn << "," << this->pXL << "," << viability << ","
-         << perDiff << endl;
-#else
-  file << viability << "," << perDiff << endl;
-#endif
+      /* Cell behaviour */
+      file << calculate_viability() << "," << calculate_mean_displacement() << endl;
   }
+
 
   // private helpers
   float BMWorld::calculate_viability() {
@@ -1822,40 +1514,66 @@ void BMWorld::sproutAgentInWorld(int num, int patchType,
     return (static_cast<float>(liveCells) / (liveCells + deadCells)) * 100;
   }
 
-  float BMWorld::calculate_pct_differentiated(map<string, int> & agent_counts) {
-    return (static_cast<float>(agent_counts["NP"]) / get_total_agent_count()) *
-           100;
+  // float BMWorld::calculate_pct_differentiated(map<string, int> & agent_counts) {
+  //   return (static_cast<float>(agent_counts["NP"]) / get_total_agent_count()) *
+  //          100;
+  // }
+
+  float BMWorld::calculate_mean_displacement() {
+    double sum = 0.0;
+    int n = 0;
+    const int cellsSize = cells.size();
+    for (int i = 0; i < cellsSize; i++) {
+      Cell *cell = cells.getDataAt(i);
+      if (!cell || !cell->isAlive()) continue;
+      sum += cell->displacementFromSeed();
+      n++;
+    }
+    return (n > 0) ? static_cast<float>(sum / n) : 0.f;
   }
+
 
   void BMWorld::write_csv_header(ofstream & file) {
-    file << "clock (30 min)" << "," // written by skeleton
-         << "Day" << ","            // written by skeleton
-         << "Total TNF (pg)" << "," // everything below written by this hook
-         << "Total IL1b (pg)" << ","
+    file << "clock (30 min)" << ","          // skeleton
+         << "Day" << ","                      // skeleton
+         /* Cytokines - Manuscript Table 2 */
+         << "Total TNF (pg)" << ","
          << "Total TGF (pg)" << ","
-         << "Total O2" << ","
+         << "Total FGF (pg)" << ","
+         << "Total IL6 (pg)" << ","
+         << "Total IL8 (pg)" << ","
+         << "Total IL10 (pg)" << ","
+         /* ECM - Manuscript Table 2 */
          << "Collagen (ug)" << ","
-         << "Aggrecan (ug)" << ","
+         << "Elastin (ug)" << ","
+         << "HA (ug)" << ","
+         << "fHA (ug)" << ","
+         /* Cells */
          << "Total Cells" << ","
-         << "Stem Cells" << ","
-         << "Pre-NP Cells" << ","
-         << "NP Cells" << ","
          << "Live Cells" << ","
          << "Dead Cells" << ","
-         << "Elastic Modulus(kPa)" << ","
-         << "Swelling Ratio" << ","
-         << "Mass Loss(%)" << ","
-         << "Alginate_wv(%)" << ","
-         << "Alginate_Mw(kDa)" << ","
-         << "Ca_XL(M)" << ","
-         << "Viability Rate(%)" << ","
-         << "Differentiation (%)" << endl;
+         << "Fibroblast" << ","
+         << "Activated Fibroblast" << ","
+         /* Scaffold - Manuscript Table 4 */
+         << "Elastic Modulus (Pa)" << ","
+         << "Swelling Ratio (%)" << ","
+         << "Mass Loss (%)" << ","
+         << "Crosslink Density (mmol/mL)" << ","
+         << "Pore Size (um)" << ","
+         << "Mesh Size (1/um)" << ","
+         /* Scaffold composition inputs */
+         << "HA_ww (%)" << ","
+         << "HA_wv (%)" << ","
+         << "TP_wv (%)" << ","
+         << "XL_ww (%)" << ","
+         /* Cell behaviour */
+         << "Viability Rate (%)" << ","
+         << "Mean Displacement (patches)" << endl;
   }
-
-  // extra output - for IVDBM-ABM,
-  // lines measuring TGF and O2 for
-  // debugging purposes
-  void BMWorld::write_auxiliary_header() {
+  
+  /* Secondary output: TGF concentration along an x-face line through the
+   * centre of the grid, for diffusion diagnostics. */
+   void BMWorld::write_auxiliary_header() {
     char tgf_path[512];
     util::makeOutputPath(tgf_path, sizeof(tgf_path), "tgf_line.csv");
     remove(tgf_path);
@@ -1863,14 +1581,6 @@ void BMWorld::sproutAgentInWorld(int num, int patchType,
     for (int xi = 0; xi <= nx / 2; xi++)
       tgf_file << "x=" << xi << (xi < nx / 2 ? "," : "\n");
     tgf_file.close();
-
-    char o2_path[512];
-    util::makeOutputPath(o2_path, sizeof(o2_path), "o2_line.csv");
-    remove(o2_path);
-    ofstream o2_file(o2_path, ios::app);
-    for (int xi = 0; xi <= nx / 2; xi++)
-      o2_file << "x=" << xi << (xi < nx / 2 ? "," : "\n");
-    o2_file.close();
   }
 
   void BMWorld::write_auxiliary_outputs() {
@@ -1882,13 +1592,13 @@ void BMWorld::sproutAgentInWorld(int num, int patchType,
       tgf_file << tgfLine[xi] << (xi < nx / 2 ? "," : "\n");
     tgf_file.close();
 
-    char o2_path[512];
-    util::makeOutputPath(o2_path, sizeof(o2_path), "o2_line.csv");
-    ofstream o2_file(o2_path, ios::app);
-    o2_file << fixed << setprecision(10);
-    for (int xi = 0; xi <= nx / 2; xi++)
-      o2_file << o2Line[xi] << (xi < nx / 2 ? "," : "\n");
-    o2_file.close();
+    // char o2_path[512];
+    // util::makeOutputPath(o2_path, sizeof(o2_path), "o2_line.csv");
+    // ofstream o2_file(o2_path, ios::app);
+    // o2_file << fixed << setprecision(10);
+    // for (int xi = 0; xi <= nx / 2; xi++)
+    //   o2_file << o2Line[xi] << (xi < nx / 2 ? "," : "\n");
+    // o2_file.close();
   }
 
   void BMWorld::patchassign_csv() {
@@ -1899,7 +1609,6 @@ void BMWorld::sproutAgentInWorld(int num, int patchType,
       char cells[512];
       char cells_w[512];
       char initcollagen[512];
-      char initaggrecan[512];
       char initHA[512];
       char damagezone[512];
       char initialdamage[512];
@@ -1915,8 +1624,6 @@ void BMWorld::sproutAgentInWorld(int num, int patchType,
       snprintf(initHA, sizeof(initHA), "%s/initHA%s%s", util::getOutputDir(),
                tempNumber, extension);
       snprintf(initcollagen, sizeof(initcollagen), "%s/initcollagen%s%s",
-               util::getOutputDir(), tempNumber, extension);
-      snprintf(initaggrecan, sizeof(initaggrecan), "%s/initaggrecan%s%s",
                util::getOutputDir(), tempNumber, extension);
       snprintf(damagezone, sizeof(damagezone), "%s/damagezone%s%s",
                util::getOutputDir(), tempNumber, extension);
@@ -2000,15 +1707,6 @@ void BMWorld::sproutAgentInWorld(int num, int patchType,
       for (int iy = 0; iy < ny; iy++) {
         for (int ix = 0; ix < nx; ix++) {
           in = ix + iy * nx + iz * nx * ny;
-          if (worldECM[in].oaggrecan[read_t] != 0 &&
-              worldPatch[in].damage[read_t] != 0) {
-            output_file3 << "g";
-            continue;
-          }
-          if (worldECM[in].oaggrecan[read_t] != 0) {
-            output_file3 << "m";
-            continue;
-          }
           if (worldPatch[in].type[read_t] == damage ||
               worldPatch[in].damage[read_t] != 0) {
             output_file3 << "x";
@@ -2025,68 +1723,14 @@ void BMWorld::sproutAgentInWorld(int num, int patchType,
       }
       output_file3.close();
 
-      // initCollagen
-      ofstream output_file4(initcollagen, ios::app);
-      for (int iy = 0; iy < ny; iy++) {
-        for (int ix = 0; ix < nx; ix++) {
-          in = ix + iy * nx + iz * nx * ny;
-          if (worldECM[in].ocollagen[read_t] != 0) {
-            output_file4 << "k";
-            continue;
-          }
-          if (worldECM[in].fcollagen[read_t] != 0) {
-            output_file4 << "f";
-            continue;
-          }
-          if (worldPatch[in].type[read_t] == nothing) {
-            output_file4 << "-";
-          }
-          if (worldPatch[in].type[read_t] == unidentifiable) {
-            output_file4 << "?";
-          }
-        }
-        output_file4 << endl;
-      }
-      output_file4.close();
-
-      // initAggrecan
-      ofstream output_file5(initaggrecan, ios::app);
-      for (int iy = 0; iy < ny; iy++) {
-        for (int ix = 0; ix < nx; ix++) {
-          in = ix + iy * nx + iz * nx * ny;
-          if (worldECM[in].oaggrecan[read_t] != 0) {
-            output_file5 << "m";
-            continue;
-          }
-          if (worldECM[in].faggrecan[read_t] != 0) {
-            output_file5 << "f";
-            continue;
-          }
-          if (worldPatch[in].type[read_t] == nothing) {
-            output_file5 << "-";
-          }
-          if (worldPatch[in].type[read_t] == unidentifiable) {
-            output_file5 << "?";
-          }
-        }
-        output_file5 << endl;
-      }
-      output_file5.close();
-
       // Cells
       ofstream output_file6(cells, ios::app);
       for (int iy = 0; iy < ny; iy++) {
         for (int ix = 0; ix < nx; ix++) {
           in = ix + iy * nx + iz * nx * ny;
           if (worldPatch[in].isOccupied()) {
-            if (worldPatch[in].occupiedby[read_t] == stem) {
+            if (worldPatch[in].occupiedby[read_t] == fibroblast) {
               output_file6 << "f";
-              continue;
-            } else if (worldPatch[in].occupiedby[read_t] == progen) {
-              output_file6 << "g";
-              continue;
-            } else if (worldPatch[in].occupiedby[read_t] == np) {
-              output_file6 << "h";
               continue;
             }
           }
@@ -2106,16 +1750,10 @@ void BMWorld::sproutAgentInWorld(int num, int patchType,
         for (int ix = 0; ix < nx; ix++) {
           in = ix + iy * nx + iz * nx * ny;
           if (worldPatch[in].isOccupiedWrite()) {
-            if (worldPatch[in].occupiedby[read_t] == stem) {
+            if (worldPatch[in].occupiedby[read_t] == fibroblast) {
               output_file6 << "f";
               continue;
-            } else if (worldPatch[in].occupiedby[read_t] == progen) {
-              output_file6 << "g";
-              continue;
-            } else if (worldPatch[in].occupiedby[read_t] == np) {
-              output_file6 << "h";
-              continue;
-            }
+            } 
           }
           if (worldPatch[in].type[write_t] == nothing) {
             output_file7 << "-";

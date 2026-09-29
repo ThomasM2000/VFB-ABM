@@ -17,6 +17,7 @@
 #include <iostream>
 #include <vector>
 #include <tgmath.h>
+#include <cmath>
 #include <iomanip> // Include for setprecision and fixed
 
 
@@ -88,6 +89,14 @@ bool Agent::rollDice(float percent) {
 	if (randNum < percent) return 1;
 	else return 0;
 }
+
+float Agent::displacementFromSeed() const {
+	const float dx = static_cast<float>(this->ix[read_t] - this->ix0);
+	const float dy = static_cast<float>(this->iy[read_t] - this->iy0);
+	const float dz = static_cast<float>(this->iz[read_t] - this->iz0);
+	return std::sqrt(dx * dx + dy * dy + dz * dz);
+}
+
 
 bool Agent::move(int dX, int dY, int dZ, int read_index) {
   // Location of agent in x,y,z dimensions of world.
@@ -186,7 +195,7 @@ void Agent::wiggle() {
 		// If the target patch is occupied, pick a new neighbor
 		if (Agent::agentPatchPtr[newindex].isOccupiedWrite()) continue;
 	
-		if (Agent::agentPatchPtr[newindex].type[read_t] == CaAlg) {
+		if (Agent::agentPatchPtr[newindex].type[read_t] == biomaterial) {
 			dx = -dx;
 			dy = -dy;
 
@@ -294,25 +303,15 @@ int Agent::countNeighborECM(int ECMIndex) {
 				if (x + dX < 0 || x + dX >= nx || y + dY < 0 || y + dY >= ny || z + dZ < 0 || z + dZ >= nz) continue;
 				int in = (x + dX) + (y + dY)*nx + (z + dZ)*nx*ny;
 				switch (ECMIndex) {
-					case orig_coll:
-						numberofecm += Agent::agentECMPtr[in].ocollagen[read_t];
-						break;
+					// case orig_coll:
+					// 	numberofecm += Agent::agentECMPtr[in].ocollagen[read_t];
+					// 	break;
 					case new_coll:
 						numberofecm += Agent::agentECMPtr[in].ncollagen[read_t];
 						break;
-					case frag_coll:
-						numberofecm += Agent::agentECMPtr[in].fcollagen[read_t];
-						break;
-
-					case orig_agg:
-						numberofecm += Agent::agentECMPtr[in].oaggrecan[read_t];
-						break;
-					case new_agg:
-						numberofecm += Agent::agentECMPtr[in].naggrecan[read_t];
-						break;
-					case frag_agg:
-						numberofecm += Agent::agentECMPtr[in].faggrecan[read_t];
-						break;
+					// case frag_coll:
+					// 	numberofecm += Agent::agentECMPtr[in].fcollagen[read_t];
+					// 	break;
 				}
 			}
 		}
@@ -349,7 +348,7 @@ int Agent::countNeighborCells(int cellIndex) {
 	return numberofcells;
 }
 
-bool Agent::moveTowardChemotaxis() {
+bool Agent::moveTowardChemotaxis(int radius) {
 	int read_index;
 
 	if (isModified(this->index))
@@ -369,20 +368,9 @@ bool Agent::moveTowardChemotaxis() {
 	double highestchem = this->patchChemotaxis(index);
 	int dx = 0, dy = 0, dz = 0;
 
-	#ifdef MODEL_SCAFFOLD
-	int radius;
-		switch (this->type[read_t]) {
-			case stem: {
-				int radius = Stem::migrationSpeed;
-			}
-			case progen: {
-				int radius = Progen::migrationSpeed;
-			}
-			case np: {
-				int radius = NP::migrationSpeed;
-			}
-		}
+	if (radius < 1) return false;
 
+	#ifdef MODEL_SCAFFOLD
 		for (int deltaz = -radius; deltaz <= radius; deltaz++) {
 			for (int deltay = -radius; deltay <= radius; deltay++) {
 				for (int deltax = -radius; deltax <= radius; deltax++) {
@@ -422,6 +410,10 @@ bool Agent::moveTowardChemotaxis() {
 	if (dx == 0 && dy == 0 && dz == 0) return false;
 	int newIndex = (ix + dx) + (iy + dy)*nx + (iz + dz)*nx*ny;
 	return this->move(dx, dy, dz, read_index);
+}
+
+bool Agent::isActivated() {
+	return this->activate[read_t];
 }
 
 void Agent::updateAgent() {

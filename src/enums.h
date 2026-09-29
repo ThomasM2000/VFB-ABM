@@ -17,9 +17,9 @@
 enum agent_t { 
   unoccupied = -1,      
   cell = 1,
-  stem = 2,
-  progen = 3,
-  np = 4,
+  fibroblast = 2,
+  afibroblast = 3, //activated fibroblast
+
   // achondrocyte = 6,     
   orig_coll = 9,    // Original collagen
   new_coll = 10,    // New collagen
@@ -35,9 +35,8 @@ enum agent_t {
 /* Colors of patches and agents for visualization with Paraview 3.0 */
 enum color_t {
   ccell = 105,
-  cstem = 100,
-  cprogen = 90,
-  cnp = 80,
+  cfibroblast = 100,
+  cafibroblast = 160,
 
   ccollagen = 139,
   caggrecan = 14,  
@@ -51,7 +50,7 @@ enum color_t {
   cdamage = 0,
   cunidentifiable = 0, 
 
-  cCaAlg = 119, 
+  cbiomaterial = 119, 
   co2 = 195
 };
 
@@ -61,20 +60,25 @@ enum chemical_t {
   /** Species identifiers for agent/world API. */
   TNF = 0,
   TGF = 1,
-  IL1beta = 2,
-  o2 = 3,
+  FGF = 2,
+  IL6 = 3,
+  IL8 = 4,
+  IL10 = 5,
 
   pTNF = 0,
   pTGF = 1,
-  pIL1beta = 2,
-  po2 = 3,
+  pFGF = 2,
+  pIL6 = 3,
+  pIL8 = 4,
+  pIL10 = 5,
 
-
-  dTNF = 4,
-  dTGF = 5,
-  dIL1beta = 6,
-  do2 = 7,
-  pcellgrad = 8
+  dTNF = 6,
+  dTGF = 7,
+  dFGF = 8,
+  dIL6 = 9,
+  dIL8 = 10,
+  dIL10 = 11,
+  pcellgrad = 12
 };
 
 // Types of patches:
@@ -82,7 +86,7 @@ enum patches_t {
   nothing = 0,          
   damage = 4,
   unidentifiable = 5,
-  CaAlg = 10
+  biomaterial = 10
 };
 
 // Time points within a tick

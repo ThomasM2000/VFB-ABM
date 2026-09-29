@@ -12,7 +12,7 @@
       "thiol_double_bond_molar_ratio": 0.1 // TDB_MR; not reported, TODO vs Zheng Shu 2004 [64]
     },
     "initial_ecm": {
-      "description": "Day-0 ECM per patch (Manuscript Table 2 state variables, ug). Measured by Sircol (Section 2.2.5) as a concentration: ug/patch = ug/mL x 3.375e-9. Set per GH condition; 0 = ECM-free construct.",
+      "description": "Day-0 ECM per patch (Sircol, Section 2.2.5). Calibration initial condition, set per GH condition.",
       "collagen_per_patch": 0.0,
       "elastin_per_patch": 0.0,
       "ha_per_patch": 0.0

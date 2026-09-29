@@ -145,22 +145,28 @@ void ChemicalEnvironment::update_chemotaxis_from_species(SpeciesId species) {
 void ChemicalEnvironment::recompute_world_totals() {
   total_tnf_ = 0.f;
   total_tgf_ = 0.f;
-  total_il1beta_ = 0.f;
-  total_o2_ = 0.f;
+  total_fgf_ = 0.f;
+  total_il6_ = 0.f;
+  total_il8_ = 0.f;
+  total_il10_ = 0.f;
 
   if (channel_data_.empty() || registry_.empty())
     return;
 
   const int tnf_ch = concentration_channel_for("TNF");
   const int tgf_ch = concentration_channel_for("TGF");
-  const int il1_ch = concentration_channel_for("IL1beta");
-  const int o2_ch = concentration_channel_for("o2");
+  const int fgf_ch = concentration_channel_for("FGF");
+  const int il6_ch = concentration_channel_for("IL6");
+  const int il8_ch = concentration_channel_for("IL8");
+  const int il10_ch = concentration_channel_for("IL10");
 
   for (int i = 0; i < grid_size_; ++i) {
     total_tnf_ += channel_row(tnf_ch)[i];
     total_tgf_ += channel_row(tgf_ch)[i];
-    total_il1beta_ += channel_row(il1_ch)[i];
-    total_o2_ += channel_row(o2_ch)[i];
+    total_fgf_ += channel_row(fgf_ch)[i];
+    total_il6_ += channel_row(il6_ch)[i];
+    total_il8_ += channel_row(il8_ch)[i];
+    total_il10_ += channel_row(il10_ch)[i];
   }
 }
 
@@ -242,14 +248,18 @@ void ChemicalEnvironment::merge_and_reset_secretion() {
 
   total_tnf_ = 0.f;
   total_tgf_ = 0.f;
-  total_il1beta_ = 0.f;
-  total_o2_ = 0.f;
+  total_fgf_ = 0.f;
+  total_il6_ = 0.f;
+  total_il8_ = 0.f;
+  total_il10_ = 0.f;
 
   const std::vector<SpeciesId> diffusing = registry_.diffusing_species();
   const int tnf_ch = concentration_channel_for("TNF");
   const int tgf_ch = concentration_channel_for("TGF");
-  const int il1_ch = concentration_channel_for("IL1beta");
-  const int o2_ch = concentration_channel_for("o2");
+  const int fgf_ch = concentration_channel_for("FGF");
+  const int il6_ch = concentration_channel_for("IL6");
+  const int il8_ch = concentration_channel_for("IL8");
+  const int il10_ch = concentration_channel_for("IL10");
   const int chemo_src =
       registry_.descriptor(merge_chemotaxis_species_).concentration_channel;
 
@@ -278,8 +288,10 @@ void ChemicalEnvironment::merge_and_reset_secretion() {
 
         total_tnf_ += channel_row(tnf_ch)[in];
         total_tgf_ += channel_row(tgf_ch)[in];
-        total_il1beta_ += channel_row(il1_ch)[in];
-        total_o2_ += channel_row(o2_ch)[in];
+        total_fgf_ += channel_row(fgf_ch)[in];
+        total_il6_ += channel_row(il6_ch)[in];
+        total_il8_ += channel_row(il8_ch)[in];
+        total_il10_ += channel_row(il10_ch)[in];
       }
     }
   }

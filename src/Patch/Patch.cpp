@@ -32,7 +32,6 @@ Patch::Patch() {
 	this->index = 0;
 	this->inDamzone = false;
 	this->initHA = false;
-	this->initaggrecan = false;
 	this->initcollagen = false;
 	this->type[read_t] = nothing;
 	this->color[read_t] = cnothing;
@@ -60,7 +59,6 @@ Patch::Patch(int x, int y, int z, int index) {
 	this->index = index;
 	this->inDamzone = false;
 	this->initHA = false;
-	this->initaggrecan = false;
 	this->initcollagen = false;
 	this->type[read_t] = nothing;
 	this->color[read_t] = cnothing;
@@ -86,7 +84,6 @@ Patch::Patch(const Patch& obj){
   inDamzone = obj.inDamzone;
   initHA = obj.initHA;
   initcollagen = obj.initcollagen;
-  initaggrecan = obj.initaggrecan;
   type[read_t] = obj.type[read_t];
   type[write_t] = obj.type[write_t];
   color[read_t] = obj.color[read_t];
@@ -119,7 +116,6 @@ Patch& Patch::operator=(const Patch& obj){
   inDamzone = obj.inDamzone;
   initHA = obj.initHA;
   initcollagen = obj.initcollagen;
-  initaggrecan = obj.initaggrecan;
   type[read_t] = obj.type[read_t];
   type[write_t] = obj.type[write_t];
   color[read_t] = obj.color[read_t];
@@ -207,8 +203,8 @@ int Patch::getColorfromType() {
 		// 		return cdamage;
 		// #endif
 
-	} else if (this->type[read_t] == CaAlg) {
-		return cCaAlg; 
+	} else if (this->type[read_t] == biomaterial) {
+		return cbiomaterial; 
 
 	} else {
 		//cerr << "patch type is invalid!" << endl;
@@ -248,16 +244,8 @@ void Patch::updatePatch() {
 
 void Patch::render() {
 	if (this->isOccupied()) {
-		if (this->occupiedby[read_t] == stem) {
-			this->color[write_t] = cstem;
-		}
-
-		if (this->occupiedby[read_t] == progen) {
-			this->color[write_t] = cprogen;
-		}
-		
-		if (this->occupiedby[read_t] == np) {
-			this->color[write_t] = cnp;
+		if (this->occupiedby[read_t] == fibroblast) {
+			this->color[write_t] = cfibroblast;
 		}
 	} else {
 		this->color[write_t] = this->getColorfromType();

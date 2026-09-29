@@ -103,17 +103,7 @@ class ECM {
      *
      * Parameters: void
      */
-    void fragmentNCollagen();
-
-    /*
-     * Description:	Breaks down each new aggrecan ECM protein on this ECM 
-     *              manager's patch into two fragmented aggrecan ECM proteins
-     *
-     * Return: void
-     *
-     * Parameters: void
-     */
-    void fragmentNAggrecan();
+    // void fragmentNCollagen();
 
     /*
      * Description:	Breaks down each hyaluronan ECM protein on this ECM 
@@ -227,12 +217,12 @@ class ECM {
      * NON-CONSTANT VARIABLES                                                *
      *************************************************************************/
     bool empty[2];     // Whether there is ECM or not at the beginning and end of each tick
-    int ocollagen[2], ncollagen[2], fcollagen[2]; // The number of original collagen (tropocollagen monomer), new collagen(collagen) and fragmented collagen at the beginning and end of each tick
-    int oaggrecan[2], naggrecan[2], faggrecan[2];    // The number of original aggrecan (monomer), new aggrecan and fragmented aggrecan at the beginning and end of each tick
-    int HA[2], fHA[2];                            // The number of hyaluronan and fragmented hyaluronan at the beginning and end of each tick 
+    float ncollagen[2];   // Col  — Table 2
+    float nelastin[2];    // Eln  — Table 2
+    float HA[2];          // HA   — Table 2
+    float fHA[2];         // HAf  — Table 2
 
-    int requestfcollagen[27];   // Keeps track of all neighbors' requests for fragmented collagen.
-    int requestfaggrecan[27];    // Keeps track of all neighbors' requests for fragmented aggrecan.
+    // int requestfcollagen[27];   // Keeps track of all neighbors' requests for fragmented collagen.
     int requestfHA[27];         // Keeps track of all neighbors' requests for fragmented hyaluronan.
 
 #ifdef OPT_ECM
@@ -248,8 +238,7 @@ class ECM {
     std::vector<int> HAlife[2];    // Number of lives for hyaluronan at the beginning and end of each tick.
 #endif
 
-    bool fcollDangerSignal[2];    // Whether or not there is a fragmented collagen signalling danger at the beginning and end of each tick 
-    bool faggDangerSignal[2];    // Whether or not there is a fragmented aggrecan signalling danger at the beginning and end of each tick
+    // bool fcollDangerSignal[2];    // Whether or not there is a fragmented collagen signalling danger at the beginning and end of each tick 
     bool fHADangerSignal[2];   // Whether or not there is a fragmented hyaluronan signalling danger at the beginning and end of each tick 
     bool scarIndex[2];    // Whether there is enough collagen to form a scar at the beginning and end of each tick
 
@@ -265,9 +254,8 @@ class ECM {
      *************************************************************************/
     static Patch* ECMPatchPtr;     // Pointer to array of all patches in the world
     static BMWorld* ECMWorldPtr;   // Pointer to the wound healing world
-    static int maxcollagen;    // The maximum amount of collagen (of all types) allowed
-    static int maxaggrecan;     // The maximum amount of aggrecan (of all types) allowed
-    static int maxHA;     // The maximum amount of hyaluronan (of all types) allowed
+    static float maxcollagen;    // The maximum amount of collagen (of all types) allowed
+    static float maxHA;     // The maximum amount of hyaluronan (of all types) allowed
     static int dx[27];    // x dimension displacement to each neighbor
     static int dy[27];    // y dimension displacement to each neighbor
     static int dz[27];    // z dimension displacement to each neighbor

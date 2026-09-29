@@ -158,11 +158,11 @@ void processOptions(int argc, char **argv) {
 #endif
 #elif defined(MODEL_SCAFFOLD)
   // Default 0.03 mL Scaffold with same cell seeding density as input
-  patchWidth = 0.01; // (mm)
-  worldXwidth = 3.1; // (mm)
-  worldYwidth = 3.1; // (mm)
+  patchWidth = 0.015; // (mm)
+  worldXwidth = 3; // (mm)
+  worldYwidth = 3; // (mm)
 #ifdef MODEL_3D
-  worldZwidth = 3.1; // (mm)
+  worldZwidth = 3; // (mm)
 #else
   worldZwidth = patchWidth; // (mm)
 #endif

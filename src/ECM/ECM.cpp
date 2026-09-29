@@ -24,9 +24,8 @@ using namespace std;
 //FIXME: Update max num of ECM on each patch 
 Patch* ECM::ECMPatchPtr = NULL; 
 BMWorld* ECM::ECMWorldPtr = NULL;
-int ECM::maxcollagen = 620*10^9;  
-int ECM::maxaggrecan = 500*10^9;  
-int ECM::maxHA = 0;
+float ECM::maxcollagen = 6.2e11f;
+float ECM::maxHA       = 1.0e9f;
 int ECM::dx[27] = {-1, 0, 1, -1, 0, 1, -1, 0, 1, -1, 0, 1, -1, 0, 1, -1, 0, 1, -1, 0, 1, -1, 0, 1, -1, 0, 1};
 int ECM::dy[27] = {-1, -1, -1, 0, 0, 0, 1, 1, 1, -1, -1, -1, 0, 0, 0, 1, 1, 1, -1, -1, -1, 0, 0, 0, 1, 1, 1};
 int ECM::dz[27] = {-1, -1, -1, -1, -1, -1, -1, -1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1};
@@ -43,34 +42,25 @@ ECM::ECM(int x, int y, int z, int index) {
 	this->indice[2] = z;
 	this->index = index;
 	this->empty[read_t] = true;
-	this->ocollagen[read_t] = 0;
+	// this->ocollagen[read_t] = 0;
 	this->ncollagen[read_t] = 0;
-	this->fcollagen[read_t] = 0;
-	this->oaggrecan[read_t] = 0;
-	this->naggrecan[read_t] = 0;
-	this->faggrecan[read_t] = 0;
+	// this->fcollagen[read_t] = 0;
 	this->HA[read_t] = 0;
 	this->fHA[read_t] = 0;
-	this->fcollDangerSignal[read_t] = false;
-	this->faggDangerSignal[read_t] = false;
+	// this->fcollDangerSignal[read_t] = false;
 	this->fHADangerSignal[read_t] = false;
 	this->scarIndex[read_t] = false;
 	this->empty[write_t] = true;
-	this->ocollagen[write_t] = 0;
+	// this->ocollagen[write_t] = 0;
 	this->ncollagen[write_t] = 0;
-	this->fcollagen[write_t] = 0;
-	this->oaggrecan[write_t] = 0;
-	this->naggrecan[write_t] = 0;
-	this->faggrecan[write_t] = 0;
+	// this->fcollagen[write_t] = 0;
 	this->HA[write_t] = 0;
 	this->fHA[write_t] = 0;
-	this->fcollDangerSignal[write_t] = false;
-	this->faggDangerSignal[write_t] = false;
+	// this->fcollDangerSignal[write_t] = false;
 	this->fHADangerSignal[write_t] = false;
 	this->scarIndex[write_t] = false;
 
-	memset(requestfcollagen, 0, 27*sizeof(int));
-	memset(requestfaggrecan, 0, 27*sizeof(int));
+	// memset(requestfcollagen, 0, 27*sizeof(int));
 	memset(requestfHA, 0, 27*sizeof(int));
 }
 
@@ -122,14 +112,14 @@ void ECM::ECMFunction() {
 	/*                                DAMAGE REPAIR                               */
 	/* -------------------------------------------------------------------------- */
 	// New ECM proteins can repair damage on their patch:
-	if (this->ncollagen[read_t] > 0 || this->naggrecan[read_t] > 0) this->repairDamage();
+	// if (this->ncollagen[read_t] > 0) this->repairDamage();
 
 	/* -------------------------------------------------------------------------- */
 	/*                                    DEATH                                   */
 	/* -------------------------------------------------------------------------- */
    
 	/* Each hyaluronan life decreases at each time step and they die naturally
-	 * Collagen & aggrecan have 'infinite life' because their half lives are on the order of years. */
+	 * Collagen have 'infinite life' because their half lives are on the order of years. */
 	#ifdef OPT_ECM
 		for_each(HAlife.begin(), HAlife.end(), decrement);
 	#else
@@ -142,12 +132,11 @@ void ECM::ECMFunction() {
 	/*                              DANGER SIGNALLING                             */
 	/* -------------------------------------------------------------------------- */
 	// Fragmented ECM proteins can signal danger one time:
-	if (fcollDangerSignal[read_t] == true || faggDangerSignal[read_t] == true) {
-		this->set_dirty();
-		this->dangerSignal();
-		fcollDangerSignal[write_t] = false;
-		faggDangerSignal[write_t] = false;
-	}
+	// if (fcollDangerSignal[read_t] == true) {
+	// 	this->set_dirty();
+	// 	this->dangerSignal();
+	// 	fcollDangerSignal[write_t] = false;
+	// }
 
 	/* -------------------------------------------------------------------------- */
 	/*                               SCAR FORMATION                               */
@@ -187,7 +176,7 @@ void ECM::repairDamage() {
 				tempPatchPtr = &(ECM::ECMPatchPtr[tempIndex]);
 
 				#ifdef MODEL_SCAFFOLD
-					// Repair Damage, but do not replace CaAlg scaffold 
+					// Repair Damage, but do not replace biomaterial scaffold 
 					if (tempPatchPtr->damage[write_t] > 0) {
 
 						// Data race allowed, since we're just overwriting values
@@ -195,7 +184,7 @@ void ECM::repairDamage() {
 						tempPatchPtr->damage[write_t] = 0;
 						tempPatchPtr->health[write_t] = 100;                                
 
-						if (tempPatchPtr->type[read_t] != CaAlg){
+						if (tempPatchPtr->type[read_t] != biomaterial){
 							tempPatchPtr->type[write_t] = nothing; 
 							tempPatchPtr->color[write_t] = cnothing; 
 						}
@@ -229,95 +218,50 @@ void ECM::dangerSignal() {
 	if (ECMPatchPtr[this->index].isOccupied() == false) return;
 }
 
-void ECM::fragmentNCollagen() {
-  	// Distance to neighbor in x,y,z dimensions of the world:
-	int dX, dY, dZ;
-	int newfragments = 0;
+// void ECM::fragmentNCollagen() {
+//   	// Distance to neighbor in x,y,z dimensions of the world:
+// 	int dX, dY, dZ;
+// 	int newfragments = 0;
 
-  	// Location of ECM manager in x,y,z dimensions of the world:
-	int ix = indice[0];
-	int iy = indice[1];
-	int iz = indice[2];
+//   	// Location of ECM manager in x,y,z dimensions of the world:
+// 	int ix = indice[0];
+// 	int iy = indice[1];
+// 	int iz = indice[2];
   
-  	// Number of patches in x,y,z dimensions of the world:
-	int nx = ECM::ECMWorldPtr->nx;
-	int ny = ECM::ECMWorldPtr->ny;
-	int nz = ECM::ECMWorldPtr->nz;
+//   	// Number of patches in x,y,z dimensions of the world:
+// 	int nx = ECM::ECMWorldPtr->nx;
+// 	int ny = ECM::ECMWorldPtr->ny;
+// 	int nz = ECM::ECMWorldPtr->nz;
 
-  	// Alert change in status of original collagen
-	if (this->ncollagen[write_t] > 0) {
-		this->set_dirty();
-		this->set_request_dirty();
-	}
+//   	// Alert change in status of original collagen
+// 	if (this->ncollagen[write_t] > 0) {
+// 		this->set_dirty();
+// 		this->set_request_dirty();
+// 	}
 
-	// Request hatching two fragmented collagens on neighboring patches for each original collagen:
-	while (this->ncollagen[write_t] > 0) {
-		this->ncollagen[write_t]--;
-		newfragments = 0;
+// 	// Request hatching two fragmented collagens on neighboring patches for each original collagen:
+// 	while (this->ncollagen[write_t] > 0) {
+// 		this->ncollagen[write_t]--;
+// 		newfragments = 0;
 
-		// Request one fragmented collagen at a random inbounds neighboring patch. //TODO(Caroline) Might want to make the radius = 2
-		std::random_shuffle(&d[0], &d[27]);
-		for (int i = 0; i < 27; i++) {
-			dX = dx[d[i]];
-			dY = dy[d[i]];
-			dZ = dz[d[i]];
-			if (newfragments >= 2) break;
-			if (ix + dX < 0 || ix + dX >= nx || iy + dY < 0 || iy + dY >= ny || iz + dZ < 0 || iz + dZ >= nz) continue;  //'dX + dY*3 + dZ*3*3 + 13' determines which neighbor
-			this->requestfcollagen[dX + dY*3 + dZ*3*3 + 13]++;
-			int in = (ix + dX) + (iy + dY)*nx + (iz + dZ)*nx*ny;
+// 		// Request one fragmented collagen at a random inbounds neighboring patch. //TODO(Caroline) Might want to make the radius = 2
+// 		std::random_shuffle(&d[0], &d[27]);
+// 		for (int i = 0; i < 27; i++) {
+// 			dX = dx[d[i]];
+// 			dY = dy[d[i]];
+// 			dZ = dz[d[i]];
+// 			if (newfragments >= 2) break;
+// 			if (ix + dX < 0 || ix + dX >= nx || iy + dY < 0 || iy + dY >= ny || iz + dZ < 0 || iz + dZ >= nz) continue;  //'dX + dY*3 + dZ*3*3 + 13' determines which neighbor
+// 			this->requestfcollagen[dX + dY*3 + dZ*3*3 + 13]++;
+// 			int in = (ix + dX) + (iy + dY)*nx + (iz + dZ)*nx*ny;
      		
-			// Alert change in status of collagen on this patch
-			this->ECMWorldPtr->worldECM[in].set_dirty_from_neighbors();
-			newfragments++;
-		}
-	}
-	this->isEmpty();
-}
-
-void ECM::fragmentNAggrecan() {
-	// Distance to neighbor in x,y,z dimensions of the world:
-	int dX, dY, dZ;
-	int newfragments = 0;
-	
-	// Location of ECM manager in x,y,z dimensions of the world:
-	int ix = indice[0];
-	int iy = indice[1];
-	int iz = indice[2];
-	
-	// Number of patches in x,y,z dimensions of the world:
-	int nx = ECM::ECMWorldPtr->nx;
-	int ny = ECM::ECMWorldPtr->ny;
-	int nz = ECM::ECMWorldPtr->nz;
-
-  	// Alert change in status of original aggrecan
-	if (this->naggrecan[write_t] > 0) {
-		this->set_dirty();
-		this->set_request_dirty();
-	}
-
-	// Request hatching two fragmented aggrecans on neighboring patches for each original aggrecan:
-	while (this->naggrecan[write_t] > 0) {
-		this->naggrecan[write_t]--;
-		newfragments = 0;
-
-		// Request one fragmented aggrecan at a random inbounds neighboring patch. // TODO(Caroline) Might want to make the radius = 2
-		std::random_shuffle(&d[0], &d[27]);
-		for (int i = 0; i < 27; i++) {
-			dX = dx[d[i]];
-			dY = dy[d[i]];
-			dZ = dz[d[i]];
-			if (newfragments >= 2) break;
-			if (ix + dX < 0 || ix + dX >= nx || iy + dY < 0 || iy + dY >= ny || iz + dZ < 0 || iz + dZ >= nz) continue; //'dX + dY*3 + dZ*3*3 + 13' determines which neighbor
-			this->requestfaggrecan[dX + dY*3 + dZ*3*3 + 13]++;
-			int in = (ix + dX) + (iy + dY)*nx + (iz + dZ)*nx*ny;
-      	
-			// Alert change in status of aggrecan on this patch
-			this->ECMWorldPtr->worldECM[in].set_dirty_from_neighbors();
-			newfragments++;
-		}
-	}
-	this->isEmpty();
-}
+// 			// Alert change in status of collagen on this patch
+// 			this->ECMWorldPtr->worldECM[in].set_dirty_from_neighbors();
+// 			newfragments++;
+// 		}
+// 	}
+// 	this->isEmpty();
+// }
 
 void ECM::fragmentHA() {
   	// Distance to neighbor in x,y,z dimensions of the world:
@@ -375,7 +319,7 @@ void ECM::fragmentHA() {
 
 void ECM::updateECM() {
 	int in;   // Patch row major index of neighbor:
-	int fcollagenrequest = 0, faggrecanrequest = 0, fHArequest = 0;   // Amount of requested fragmented ECM proteins:
+	int fHArequest = 0;   // Amount of requested fragmented ECM proteins:
 
   	// Location of ECM manager in x,y,z dimensions of the world:
 	int ix = this->indice[0];
@@ -390,7 +334,7 @@ void ECM::updateECM() {
   /*************************************************************************
    * FRAGMENTED ECM REQUESTS                                               *
    *************************************************************************/
-	// Iterate through neighboring patches, count any fcollage/aggrecan/HA requests for ECM manager
+	// Iterate through neighboring patches, count any fcollage/HA requests for ECM manager
 	#ifdef OPT_ECM
 		if (this->dirty_from_neighbors) { 	// Only process requests if a neighbor has indicated that it's made a fragment request to this ECM manager
 	#endif
@@ -411,8 +355,7 @@ void ECM::updateECM() {
           		
 				/* self_neighbor_in is the index of this ECM manager in the list of its neighbor's list of neighbors. */
 	    		int self_neighbor_in = (-dX[i]) + (-dY[i])*3 + (-dZ)*3*3 + 13;
-    			fcollagenrequest += neighborECMPtr->requestfcollagen[self_neighbor_in];
-    			faggrecanrequest += neighborECMPtr->requestfaggrecan[self_neighbor_in];
+    			// fcollagenrequest += neighborECMPtr->requestfcollagen[self_neighbor_in];
 	    	}
     }
 #else
@@ -423,37 +366,27 @@ void ECM::updateECM() {
           // Try another neighbor if this one is out of bounds
 					if (ix + dX < 0 || ix + dX >= nx || iy + dY < 0 || iy + dY >= ny || iz + dZ < 0 || iz + dZ >= nz) continue;
 					in = (ix + dX) + (iy + dY)*nx + (iz + dZ)*nx*ny;
-					int a = ECMWorldPtr->worldECM[in].requestfcollagen[(-dX) + (-dY)*3 + (-dZ)*3*3 + 13];
-					int b = ECMWorldPtr->worldECM[in].requestfaggrecan[(-dX) + (-dY)*3 + (-dZ)*3*3 + 13];
+					// int a = ECMWorldPtr->worldECM[in].requestfcollagen[(-dX) + (-dY)*3 + (-dZ)*3*3 + 13];
 					int c = ECMWorldPtr->worldECM[in].requestfHA[(-dX) + (-dY)*3 + (-dZ)*3*3 + 13];
-					if (a != 0) {
-						//cout << "  fcollagen requested at " << ix + iy*nx + iz*nx*ny << " by " << in << endl;
-					}
-					if (b != 0) {
-						//cout << "  faggrecan requested at " << ix + iy*nx + iz*nx*ny << " by " << in << endl;
-					}
-					fcollagenrequest += a;
-					faggrecanrequest += b;
+					// if (a != 0) {
+					// 	//cout << "  fcollagen requested at " << ix + iy*nx + iz*nx*ny << " by " << in << endl;
+					// }
+					// fcollagenrequest += a;
 				}
 			}
 		}
 #endif
 
 		// Fragmented ECM requests can only be accepted if there is enough space. // TODO(Kim): INSERT REF?
-		if (ocollagen[read_t] + ncollagen[read_t] + fcollagen[read_t] + fcollagenrequest > maxcollagen) {
+		if (ncollagen[read_t] > maxcollagen) {
 			cout << "  Error fcollagen request" << endl;
-		} else if (oaggrecan[read_t] + naggrecan[read_t] + faggrecan[read_t] + faggrecanrequest > maxaggrecan) {
-			cout << "  Error faggrecan request" << endl;
 		} else {
       		// Fragmented ECM proteins serve as danger signals once
-			this->fcollagen[write_t] += fcollagenrequest;
-			this->fcollDangerSignal[write_t] += fcollagenrequest;
-			this->faggrecan[write_t] += faggrecanrequest;
-			this->faggDangerSignal[write_t] += faggrecanrequest;
+			// this->fcollagen[write_t] += fcollagenrequest;
+			// this->fcollDangerSignal[write_t] += fcollagenrequest;
 			this->isEmpty();
 		}
-		this->fcollagen[read_t] = this->fcollagen[write_t];
-		this->faggrecan[read_t] = this->faggrecan[write_t];
+		// this->fcollagen[read_t] = this->fcollagen[write_t];
 
 #ifdef OPT_ECM
 	}	// if (this->dirty_from_neighbors)
@@ -464,27 +397,12 @@ void ECM::updateECM() {
 	// Only synchronize the read and write entries if there's a change in value
 	if (this->dirty) {
 #endif
-		this->empty[read_t] = this->empty[write_t];
-		this->ocollagen[read_t] = this->ocollagen[write_t];
+		this->empty[read_t]     = this->empty[write_t];
+		/* Manuscript Table 2 ECM state variables: Col, Eln, HA, HA_f. */
 		this->ncollagen[read_t] = this->ncollagen[write_t];
-		this->oaggrecan[read_t] = this->oaggrecan[write_t];
-		this->naggrecan[read_t] = this->naggrecan[write_t];
-		this->HA[read_t] = this->HA[write_t];
-
-		// Convert ocollagen (tropocollagen monomer) to ncollagen (polymer)
-		while (this->ocollagen[read_t] > 1) {
-			this->ocollagen[read_t] -= 2;
-			this->ocollagen[write_t] -= 2;
-			this->ncollagen[read_t] += 1;
-			this->ncollagen[write_t] += 1;
-		}
-
-		while (this->oaggrecan[read_t] > 1) {
-			this->oaggrecan[read_t] -= 2;
-			this->oaggrecan[write_t] -= 2;
-			this->naggrecan[read_t] += 1;
-			this->naggrecan[write_t] += 1;
-		}
+		this->nelastin[read_t]  = this->nelastin[write_t];
+		this->HA[read_t]        = this->HA[write_t];
+		this->fHA[read_t]       = this->fHA[write_t];
 
     // Get rid of all dead hyaluronans
 	#ifdef OPT_ECM
@@ -499,8 +417,7 @@ void ECM::updateECM() {
 			else ++it;	
 		}
 
-		this->fcollDangerSignal[read_t] = this->fcollDangerSignal[write_t];
-		this->faggDangerSignal[read_t] = this->faggDangerSignal[write_t];
+		// this->fcollDangerSignal[read_t] = this->fcollDangerSignal[write_t];
 		this->scarIndex[read_t] = this->scarIndex[write_t];
 	#ifdef OPT_ECM
 		}	// if (this->dirty)
@@ -513,23 +430,25 @@ void ECM::updateECM() {
 	this->reset_dirty_from_neighbors();
 }
 
+/*
+ * A patch is empty only when it holds none of the four Manuscript Table 2
+ * ECM state variables (Col, Eln, HA, HA_f). executeECMs() skips ECMFunction()
+ * on empty patches, so leaving elastin or HA out of this test would stop HA
+ * lifetime decay and fragmentation on patches that carry no collagen.
+ */
 void ECM::isEmpty() {
-	int totalcollagen = ocollagen[write_t] + ncollagen[write_t] + fcollagen[write_t] ;
-	int totalaggrecan = oaggrecan[write_t] + naggrecan[write_t] + faggrecan[write_t];
-		if (totalcollagen + totalaggrecan == 0) { 
-		this->empty[write_t] = true;
-	} else {
-		this->empty[write_t] = false;
-	}
+	const float totalECM = this->ncollagen[write_t] + this->nelastin[write_t]
+	                     + this->HA[write_t]        + this->fHA[write_t];
+	this->empty[write_t] = (totalECM <= 0.f);
 }
+
 
 void ECM::resetrequests() {
 #ifdef OPT_ECM
 	// Only clear the requests if there are any in this tick
 	if (this->request_dirty) {
 #endif
-		memset(this->requestfcollagen, 0, 27*sizeof(int));
-		memset(this->requestfaggrecan, 0, 27*sizeof(int));
+		// memset(this->requestfcollagen, 0, 27*sizeof(int));
 #ifdef OPT_ECM
 	}
 #endif

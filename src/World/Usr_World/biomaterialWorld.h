@@ -27,11 +27,11 @@
 #include <vector>
 
 class Cell;
-class Stem;
-class Progen;
-class NP;
+class Fibroblast;
 class Collagen;
-class Aggrecan;
+class Elastin;
+class HA;
+class fHA;
 class Hyaluronan;
 class ECM;
 
@@ -61,10 +61,10 @@ public:
    *             height   -- Height (z dimension) of the world in millimeters
    *             plength  -- Length of each patch (grid point) in millimeters
    */
-  BMWorld(double width = 5,     // mm
-          double length = 4,    // mm
+  BMWorld(double width = 3,     // mm
+          double length = 3,    // mm
           double height = 3,    // mm
-          double plength = 0.01 // mm (10 um)
+          double plength = 0.015 // mm (15 um)
   );
 
   /*
@@ -121,7 +121,7 @@ public:
   void initializeCells();
 
   /*
-   * Description:	Initializes collagen, aggrecan and hyaluronan to their
+   * Description:	Initializes collagen and hyaluronan to their
    * correct patches
    *
    * Return: void
@@ -136,7 +136,7 @@ public:
    * Return: void
    * Parameters: void
    */
-  void initializeDamage();
+  // void initializeDamage();
 
   /*
    * Description:	Each call to go() simulates 30 minutes or 'real-world'
@@ -268,10 +268,10 @@ public:
   /** Integrated cytokine masses (from environment when available). */
   float world_total_tnf() const;
   float world_total_tgf() const;
-  float world_total_il1beta() const;
-
-  /** Integrated O2 mass */
-  float world_total_o2() const;
+  float world_total_fgf() const;
+  float world_total_il6() const;
+  float world_total_il8() const;
+  float world_total_il10() const;
 
   float chem_concentration(SpeciesId species, int patch_index) const;
   void chem_add_secretion(SpeciesId species, int patch_index,
@@ -312,22 +312,12 @@ public:
    * Return:
    * Parameters:
    */
-  void initializeCaAlg();
+  void initializeBiomaterial();
 
-  /*
-   * Description: Update Ca-Alg Swelling Ratio at current tick
-   *
-   * Return:
-   * Parameters:
-   */
+  /** Q = (c9 HAww + c10) ln(t_min) + c11 HAww + c12    (Table 4). */
   void updateSwellingRatio();
 
-  /*
-   * Description:Update Ca-Alg Mass Loss (% of initial mass) at current tick
-   *
-   * Return:
-   * Parameters:
-   */
+  /** w_l = (c13 HAww - c14) t_weeks + c15 HAww + c16   (Table 4). */
   void updateMassLoss();
 
 #ifdef PEPTIDE_BM
@@ -344,10 +334,10 @@ public:
    *
    * Return:
    *
-   * Parameters:        numOfPatches  -- number of CaAlg patches to "degrade"
+   * Parameters:        numOfPatches  -- number of biomaterial patches to "degrade"
    * and be replaced with patch type tissue
    */
-  void degradeCaAlg(int numOfPatches);
+  void degradebiomaterial(int numOfPatches);
 
   /*
    * Description: Print out extra info for debugging purposes
@@ -382,97 +372,100 @@ public:
   void patchassign_csv();
 
   /****************************************************************
-   * STATIC VARIABLES                                             *
+   * WORLD VARIABLES  (Manuscript Table 2)                        *
    ****************************************************************/
+  static unsigned seed;
 
-  static unsigned seed;      // Used to generate random numbers
-  static bool highTNFdamage; // Whether there is high TNF damage (which results
-                             // in ECM fragmentation)
-  static float patchpermm; // The number of patches per millimeter in the world
-  static float liveCells;
-  static float deadCells;
-  static float deletedCells;
-  static float prevCells;
-  static int initialCaAlg; // The number of initial tissue patches
+  static float E;         // Elastic modulus, Pa
+  static float poreWidth; // p, pore size, um
+  static float meshSize;  // mesh = 15000 / p, um^-1
+  static float Q;         // Swelling ratio, % w/w
+  static float massLoss;  // w_l, mass loss of wet weight, %
+  static float pXL;       // rho_XL, crosslinking density, mmol/mL
 
-  static float E; // Effective stiffness
+  static float HAww;  // HA concentration, % w/w of the polymer
+  static float HAwv;  // HA concentration, % w/v
+  static float TPwv;  // Total HA-Gtn polymer, % w/v
+  static float XLww;  // Crosslinker (PEGDA) concentration, % w/w
+  static float TDBMR; // Thiol : double bond molar ratio, mol/mol
 
-  static float initialO2;   // Initial concentration of oxygen (umol/L)
-  static float incrementO2; // Percentage of initial patch O2 to add every tick
-                            // as replenishment from external source
+  static float patchpermm;      // Patches per millimetre
+  static int   initialPatches;  // Biomaterial patches present at t = 0
+  static float totalVolumeML;   // Construct volume, mL
 
-#ifdef PEPTIDE_BM
-  static float E_0;   // Initial elastic modulus (peptide-conjugated BM)
-  static float E_inf; // Equilibrium modulus (peptide-conjugated BM)
-  static float t;     // Stress relaxation time (seconds)
-#endif
+  static float liveCells, deadCells, deletedCells, prevCells;
 
-  // Crosslinked Ca-Alg Hydrogel Parameters
-  //  Ca Crosslinker:
-  static float Ca_Mw; // Molecular Weight
-  // Alginate:
-  static float Alg_Mn;        // Number Average Molecular Weight (g mol-1)
-  static float totalVolumeML; //
-
-  /* CALIBRATION Variables */
-  static float thresholdTNFdamage; // The threshold for TNF damage
-  static float cytokineDecay[6];   // The decay rates of the cytokines
-  static float
-      halfLifes_static[6]; // The half lifes of the cytokines in minutes
-
-  /* Calibration Variables */
+  /****************************************************************
+  * BIOMATERIAL-RULE PARAMETERS  (Manuscript Table 4, c1 .. c19) *
+  ****************************************************************/
+  /** E = c1 TPwv HAww + c2 HAww + c3 TPwv + c4 HAwv XLww + c5 XLww + c6 */
   enum ElasticModIdx {
-    ELASTIC_INTERCEPT = 0,
-    ELASTIC_ALGINATE_CONCENTRATION,
-    ELASTIC_CROSSLINKER_DENSITY,
-    ELASTIC_ALGINATE_MOLECULAR_WEIGHT,
-    ELASTIC_ALGINATE_CROSSLINKER_INTERACTION,
-    ELASTIC_ALGINATE_MW_INTERACTION,
-    ELASTIC_MW_CROSSLINKER_INTERACTION,
+    ELASTIC_POLYMER_HA_INTERACTION = 0,  // c1
+    ELASTIC_HA_CONCENTRATION,            // c2
+    ELASTIC_POLYMER_CONCENTRATION,       // c3
+    ELASTIC_HA_CROSSLINKER_INTERACTION,  // c4
+    ELASTIC_CROSSLINKER_CONCENTRATION,   // c5
+    ELASTIC_BASELINE,                    // c6
     ELASTIC_MOD_COUNT
   };
   static_assert(sizeof(ElasticModulusParams) / sizeof(double) == ELASTIC_MOD_COUNT,
                 "ElasticModulusParams field count must match BMWorld::ElasticModIdx");
-  static float ElasticMod[ELASTIC_MOD_COUNT]; // Elastic Modulus of Ca-Alg Hydrogel
-  static float XLDensity[2];  // Crosslink density of Ca-Alg Hydrogel
+  static float ElasticMod[ELASTIC_MOD_COUNT];
 
+  /** rho_XL = c7 - c8 TDB_MR */
+  enum XLDensityIdx {
+    XLDENSITY_BASELINE = 0,               // c7
+    XLDENSITY_THIOL_DOUBLE_BOND_EFFECT,   // c8
+    XLDENSITY_COUNT
+  };
+  static_assert(sizeof(CrosslinkDensityParams) / sizeof(double) == XLDENSITY_COUNT,
+                "CrosslinkDensityParams field count must match BMWorld::XLDensityIdx");
+  static float XLDensity[XLDENSITY_COUNT];
+
+  /** Q = (c9 HAww + c10) ln(t_m) + c11 HAww + c12 */
   enum SwellRatioIdx {
-    SWELL_BASELINE = 0,
-    SWELL_TIME_EFFECT,
-    SWELL_ALGINATE_CONCENTRATION_EFFECT,
-    SWELL_TIME_CROSSLINKER_INTERACTION,
-    SWELL_ALGINATE_CROSSLINKER_INTERACTION,
+    SWELL_HA_TIME_EFFECT = 0, // c9
+    SWELL_TIME_EFFECT,        // c10
+    SWELL_HA_EFFECT,          // c11
+    SWELL_BASELINE,           // c12
     SWELL_RATIO_COUNT
   };
   static_assert(sizeof(SwellRatioParams) / sizeof(double) == SWELL_RATIO_COUNT,
                 "SwellRatioParams field count must match BMWorld::SwellRatioIdx");
-  static float SwellRatio[SWELL_RATIO_COUNT]; // Swell Ratio of Ca-Alg Hydrogel
+  static float SwellRatio[SWELL_RATIO_COUNT];
 
+  /** w_l = (c13 HAww - c14) t_w + c15 HAww + c16 */
   enum MassLossIdx {
-    MASSLOSS_BASELINE = 0,
-    MASSLOSS_CROSSLINKER_EFFECT,
-    MASSLOSS_TIME_EFFECT,
-    MASSLOSS_CROSSLINKER_TIME_INTERACTION,
+    MASSLOSS_HA_TIME_EFFECT = 0, // c13
+    MASSLOSS_TIME_EFFECT,        // c14
+    MASSLOSS_HA_EFFECT,          // c15
+    MASSLOSS_BASELINE,           // c16
     MASS_LOSS_COUNT
   };
   static_assert(sizeof(MassLossParams) / sizeof(double) == MASS_LOSS_COUNT,
                 "MassLossParams field count must match BMWorld::MassLossIdx");
-  static float MassLoss[MASS_LOSS_COUNT];   // Mass loss of Ca-Alg Hydrogel
+  static float MassLoss[MASS_LOSS_COUNT];
 
-  enum PoreSizeIdx { PORE_CROSSLINKER_EFFECT = 0, PORE_BASELINE, PORE_SIZE_COUNT };
+  /** p = -c17 HAww^2 + c18 HAww + c19 */
+  enum PoreSizeIdx {
+    PORE_HA_QUADRATIC_EFFECT = 0, // c17
+    PORE_HA_LINEAR_EFFECT,        // c18
+    PORE_BASELINE,                // c19
+    PORE_SIZE_COUNT
+  };
   static_assert(sizeof(PoreSizeParams) / sizeof(double) == PORE_SIZE_COUNT,
                 "PoreSizeParams field count must match BMWorld::PoreSizeIdx");
-  static float PoreSize[PORE_SIZE_COUNT];   // PoreSize of Ca-Alg Hydrogel
+  static float PoreSize[PORE_SIZE_COUNT];
 
   /****************************************************************
    * CONSTANT VARIABLES                                           *
    ****************************************************************/
   double patchlength; // The length of each patch
 
-  float pXL;       // Crosslink Density (mmol/mL)
-  float Q;         // Swelling Ratio (%)
-  float w;         // Mass Loss (%)
-  float poreWidth; // Pore Size (um)
+  // float pXL;       // Crosslink Density (mmol/mL)
+  // float Q;         // Swelling Ratio (%)
+  // float w_l;         // Mass Loss (%)
+  // float p; // Pore Size (um)
 
 #ifdef PEPTIDE_BM
   string peptide; // Type of peptide used for biomaterial conjugation
@@ -483,7 +476,12 @@ public:
   ECM *worldECM;              // Pointer to array of ECM
   vector<int>
       initialCells; // Initial amount of each cell type (agent) in the world
-
+  
+  /** Day-0 ECM from world_init.initial_ecm (ug per patch, Manuscript Table 2). */
+  double initialCollagenPerPatch = 0.0;
+  double initialElastinPerPatch  = 0.0;
+  double initialHAPerPatch       = 0.0;
+  
   ArrayChain<Cell *> cells; // ArrayChain to manage all cell data
   vector<Cell *>
       *localNewCells[MAX_NUM_THREADS]; // Vector of pointers to local lists of
@@ -495,17 +493,27 @@ public:
 
   vector<float> tgfLine; // Vector to store TGF values along an x-face line from
                          // boundary to center of ABM grid
-  vector<float> o2Line;  // Vector to store O2 values along an x-face line from
+  vector<float> fgfLine; // Vector to store FGF values along an x-face line from
+                         // boundary to center of ABM grid
+  vector<float> il6Line; // Vector to store IL6 values along an x-face line from
+                         // boundary to center of ABM grid
+  vector<float> il8Line; // Vector to store IL8 values along an x-face line from
+                         // boundary to center of ABM grid
+  vector<float> il10Line; // Vector to store IL10 values along an x-face line from
+                         // boundary to center of ABM grid
+  vector<float> tnfLine; // Vector to store TNF values along an x-face line from
+                         // boundary to center of ABM grid
+
   // boundary to center of ABM grid
 
   int lineY;
   int lineZ;
 
-  float Alg_v, Alg_wv; // Volume (mL) and final concentration (% w/v) of Alg in
-                       // Ca-Alg hydrogel
+  // float Alg_v, Alg_wv; // Volume (mL) and final concentration (% w/v) of Alg in
+  //                      // Ca-Alg hydrogel
   float Ca_v, Ca_wv;   // Volume (mL) and final concentration (% w/v) of Ca 3400
-  float highMW_alg, lowMW_alg; // ratio components of high and low MW kDa in the
-                               // alginate hydrogel
+  // float highMW_alg, lowMW_alg; // ratio components of high and low MW kDa in the
+  //                              // alginate hydrogel
 
   /** Owns patch grids, registry, and per-tick diffusion. */
   std::unique_ptr<ChemicalEnvironment> chemical_environment_;
@@ -632,7 +640,7 @@ private:
    * Return: void
    * Parameters: void
    */
-  void updateO2();
+  // void updateO2();
 
   /*
    * Description:	Helper function for ECM updates. Execute updates for ALL
@@ -688,7 +696,9 @@ private:
   // viability and differentiation are internal calculations
   // used only in write_data_row ? not exposed as hooks
   float calculate_viability();
-  float calculate_pct_differentiated(std::map<std::string, int> &agent_counts);
+  // float calculate_pct_differentiated(std::map<std::string, int> &agent_counts);
+
+  float calculate_mean_displacement();
 };
 
 #ifdef PEPTIDE_BM
