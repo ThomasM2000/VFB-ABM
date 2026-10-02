@@ -509,6 +509,12 @@ int Cell::hatchnewcell(int number, int agentType, int here) {
 			continue;
 		}
 		if (!newcell) continue;
+		/* Daughters inherit the mother's seed position, so mean displacement
+		 * tracks lineage dispersal instead of resetting to 0 at every birth. */
+		newcell->ix0 = this->ix0;
+		newcell->iy0 = this->iy0;
+		newcell->iz0 = this->iz0;
+ 
 
 		Agent::agentPatchPtr[in].setOccupied();
 		Agent::agentPatchPtr[in].occupiedby[write_t] = fibroblast;

@@ -209,37 +209,9 @@ void Agent::wiggle() {
 		// If the target patch is occupied, pick a new neighbor
 		if (Agent::agentPatchPtr[newindex].isOccupiedWrite()) continue;
 	
-		if (Agent::agentPatchPtr[newindex].type[read_t] == biomaterial) {
-			dx = -dx;
-			dy = -dy;
-
-			vector<int> xtarget;
-			vector<int> ytarget;
-			vector<int> ztarget;
-
-			// Look for neighbors that are not capillary that are inside world dimensions:
-			for (int dxx = -1; dxx <= 1; dxx++) {
-				for (int dyy = -1; dyy <= 1; dyy++) {
-					for (int dzz = -1; dzz <= 1; dzz++) {
-						if (x + dxx < 0 || x + dxx >= nx || y + dyy < 0 || y + dyy >= ny || z + dzz < 0 || z + dzz >= nz) continue;
-						
-						int in = (x + dxx) + (y + dyy)*nx + (z + dzz)*nx*ny;
-						xtarget.push_back(dxx);
-						ytarget.push_back(dyy);
-						ztarget.push_back(dzz);
-					}
-				}
-			}
-
-			// Move to a random neighbor that is not capillary that is inside world dimensions:
-			int randInt = rand_r(&(agentWorldPtr->seeds[tid]))%(xtarget.size());
-			dx = xtarget[randInt];
-			dy = ytarget[randInt];
-			dz = ztarget[randInt];
-
-		} else {
-			cout << "exception! encountered by " << this->index[read_t] << " " << Agent::agentPatchPtr[newindex].type[read_t] <<  " " << Agent::agentPatchPtr[this->index[read_t]].type[read_t] << endl;
-		}
+		/* Only move onto an intact biomaterial patch (degraded patches are
+		 * type nothing); otherwise pick another neighbour. */
+		if (Agent::agentPatchPtr[newindex].type[read_t] != biomaterial) continue;
 
 		if (this->move(dx, dy, dz, read_index) == true) break;  // If move() was successful, get out of the while loop
 		else continue;  										// If move() was NOT successful, pick a new neighbor
