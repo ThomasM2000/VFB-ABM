@@ -429,25 +429,31 @@ void Cell::copyAndInitialize(Agent* original, int dx, int dy, int dz) {
 
 int Cell::get_max_doublings() { return 100; }   // ihVFF, passage 6-10
 
-void Cell::proliferate() {
+/*
+ * Table 3, rule 3. Prolif is the chance of dividing within one k6-hour window.
+ * Instead of rolling once at every k6 boundary (which makes the whole
+ * population divide on the same tick), roll every tick with the per-tick
+ * share of that rate: p_tick = Prolif * dt / k6. The expected number of
+ * divisions per k6 hours is still Prolif, but births are spread over time.
+ */
+ void Cell::proliferate() {
 	int in = this->index[read_t];
 	if (Agent::agentPatchPtr[in].type[read_t] != biomaterial) return;
-  
-	// const float hours_between = Fibroblast::proliferation[Fibroblast::PROLIFERATION_HOURS_BETWEEN]; // k6
-	// if (hours_between <= 0) return;
-	// if (fmod(BMWorld::reportHour(), hours_between) != 0) return;
-	// if (BMWorld::reportHour() == 0) return;  // no division on the seeding tick
-	if (intervals_elapsed(Fibroblast::proliferation[Fibroblast::PROLIFERATION_HOURS_BETWEEN]) == 0) return; // k6
-
 	if (this->doublings[read_t] >= this->get_max_doublings()) return;
 
-	float prob = this->get_prolif_prob();
-	if (prob <= 0) return;
-  
-	if (Agent::rollDice(prob) && this->hatchnewcell(1, this->type[read_t]) > 0)
-	  this->doublings[write_t] = this->doublings[read_t] + 1;
+	const double k6_h = Fibroblast::proliferation[Fibroblast::PROLIFERATION_HOURS_BETWEEN]; // k6
+	if (k6_h <= 0.0) return;
 
+	const double prolif = this->get_prolif_prob();          // % per k6-hour window
+	if (prolif <= 0.0) return;
+
+	const double tick_h = Agent::agentWorldPtr->tick_interval_minutes() / 60.0;
+	const double p_tick = prolif * (tick_h / k6_h);          // % per tick
+
+	if (Agent::rollDice(static_cast<float>(p_tick)) && this->hatchnewcell(1, this->type[read_t]) > 0)
+		this->doublings[write_t] = this->doublings[read_t] + 1;
 }
+
 
 float Cell::get_migration_speed()          { return 0; }
 float Cell::get_viability_rate(double)     { return 100; }
@@ -674,8 +680,11 @@ void Fibroblast::create_cytokines() {
  *   else       -> k42 + Col/k43
  */
 void Fibroblast::create_collagen() {
-	const int n_events = intervals_elapsed(Fibroblast::collagenSynth[COLLAGEN_HOURS_BETWEEN]); // k32
-	if (n_events == 0) return;
+	const double k32_h = Fibroblast::collagenSynth[COLLAGEN_HOURS_BETWEEN];   // k32
+	if (k32_h <= 0.0) return;
+	const float frac = static_cast<float>(
+	    (Agent::agentWorldPtr->tick_interval_minutes() / 60.0) / k32_h);    // share of one event per tick
+
   
 	const int in = this->index[read_t];
 	const float lTGF = this->patchChemConcentration(TGF, in);
@@ -708,7 +717,7 @@ void Fibroblast::create_collagen() {
 			 + col / safe_denominator(Fibroblast::collagenSynth[COLLAGEN_CHEMICAL_EFFECT]); // k43
 	}
   
-	this->depositCollagen(rate * n_events);
+	this->depositCollagen(rate * frac);
 }
 
 /*
@@ -717,8 +726,10 @@ void Fibroblast::create_collagen() {
  *   Eln   = Eln_b ( (k47 log10(1+TGF) + k48) / (k49 (1+FGF+TNF)) + k50 )
  */
 void Fibroblast::create_elastin() {
-	const int n_events = intervals_elapsed(Fibroblast::collagenSynth[COLLAGEN_HOURS_BETWEEN]); // k32
-	if (n_events == 0) return;
+	const double k32_h = Fibroblast::collagenSynth[COLLAGEN_HOURS_BETWEEN];   // k32 (shared with collagen)
+	if (k32_h <= 0.0) return;
+	const float frac = static_cast<float>(
+	    (Agent::agentWorldPtr->tick_interval_minutes() / 60.0) / k32_h);    // share of one event per tick
   
 	const int in = this->index[read_t];
 	const float lTGF = this->patchChemConcentration(TGF, in);
@@ -737,7 +748,7 @@ void Fibroblast::create_elastin() {
 										* (1.f + lFGF + lTNF))
 				 + Fibroblast::elastinSynth[ELASTIN_BASELINE_RATE]);                  // k50
   
-	this->depositElastin(eln * n_events);
+	this->depositElastin(eln * frac);
 }
 
 /*
@@ -748,8 +759,17 @@ void Fibroblast::create_elastin() {
  *   with probability k58 + HA/k59  -> deposit HA on the current patch
  */
 void Fibroblast::create_ha() {
-	const int n_events = intervals_elapsed(Fibroblast::haSynth[HA_HOURS_BETWEEN]); // k51
-	if (n_events == 0) return;
+	/* "Every k51 hours" as a rate: on average tick_h / k51 HA events per tick.
+	 * Each event is run whole (same amount, same k57 move, same k58/k59 roll),
+	 * so the extra k57 movement keeps its original frequency; only the timing
+	 * is spread out instead of every cell firing on the same tick. */
+	 const double k51_h = Fibroblast::haSynth[HA_HOURS_BETWEEN];   // k51
+	 if (k51_h <= 0.0) return;
+	 const double expected = (Agent::agentWorldPtr->tick_interval_minutes() / 60.0) / k51_h;
+	 int n_events = static_cast<int>(std::floor(expected));
+	 if (Agent::rollDice(static_cast<float>((expected - n_events) * 100.0))) n_events++;
+	 if (n_events == 0) return;
+ 
   
 	const int in = this->index[read_t];
 	const float lTGF = this->patchChemConcentration(TGF, in);
