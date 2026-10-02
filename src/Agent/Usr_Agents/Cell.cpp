@@ -41,7 +41,20 @@ static inline double sim_days_at_least_one() {
   double t = BMWorld::reportDay();
   return (t >= 1.0) ? t : 1.0;  // ln(t) is undefined at t = 0
 }
-
+/* Number of `interval_h`-hour boundaries crossed during the current tick.
+ * Replaces fmod(hour, k) == 0, which only works when k is a multiple of the
+ * 0.5 h tick and never fires for values such as k6 = 23.7 during SA/NM. */
+static inline int intervals_elapsed(double interval_h) {
+	if (interval_h <= 0.0) return 0;
+	const double tick_h = Agent::agentWorldPtr->tick_interval_minutes() / 60.0;
+	const double now  = BMWorld::reportHour();
+	const double prev = now - tick_h;
+	if (prev < 0.0) return 0;
+	const double eps = 1e-9;
+	return static_cast<int>(std::floor(now  / interval_h + eps)
+						  - std::floor(prev / interval_h + eps));
+}
+  
 
 //DEFAULT CONSTRUCTORS
 Cell::Cell() {
@@ -143,22 +156,34 @@ Cell::Cell(int x, int y, int z) {
 		this->size[read_t] = 2;
 		this->type[read_t] = cell;
 		this->doublings[write_t] = 0;
+		this->realDeath[read_t] = false;
 	#else
 		this->ix[read_t] = x;
 		this->iy[read_t] = y;
 		this->iz[read_t] = z;
 		this->index[read_t] = x + y*nx + z*nx*ny;
-		this->alive[read_t] = true;
+		this->alive[read_t] = false;
 		this->life[read_t] = 0;
 		this->activate[read_t] = false;
 		this->color[read_t] = ccell;
 		this->size[read_t] = 2;
 		this->type[read_t] = cell;
 		this->doublings[write_t] = 0;
+		this->realDeath[read_t] = false;
 	#endif
 }
 
-Fibroblast::Fibroblast(int x, int y, int z) : Cell(x, y, z) {}
+Fibroblast::Fibroblast(int x, int y, int z) : Cell(x, y, z) {
+	this->type[read_t]       = fibroblast;
+	this->type[write_t]      = fibroblast;
+	this->color[read_t]      = cfibroblast;
+	this->color[write_t]     = cfibroblast;
+	this->doublings[read_t]  = 0;
+	this->doublings[write_t] = 0;
+	this->realDeath[read_t]  = false;
+	this->realDeath[write_t] = false;
+}
+
 
 //DESTRUCTORS
 Cell::~Cell() {}
@@ -195,8 +220,7 @@ void Cell::depositCollagen(float amount) {
 									this->iz[read_t],
 									&(Agent::agentWorldPtr->seeds[tid]));
 	if (in < 0) return;
-	Agent::agentECMPtr[in].ncollagen[write_t] =
-		Agent::agentECMPtr[in].ncollagen[read_t] + static_cast<float>(amount);
+	Agent::agentECMPtr[in].ncollagen[write_t] += amount;
 #ifdef OPT_ECM
 	Agent::agentECMPtr[in].set_dirty();
 #endif
@@ -212,8 +236,7 @@ void Cell::depositElastin(float amount) {
 									this->iz[read_t],
 									&(Agent::agentWorldPtr->seeds[tid]));
 	if (in < 0) return;
-	Agent::agentECMPtr[in].nelastin[write_t] =
-		Agent::agentECMPtr[in].nelastin[read_t] + static_cast<float>(amount);
+	Agent::agentECMPtr[in].nelastin[write_t]  += amount; 
 #ifdef OPT_ECM
 	Agent::agentECMPtr[in].set_dirty();
 #endif
@@ -234,8 +257,7 @@ void Cell::depositHA(float amount, int here) {
 								&(Agent::agentWorldPtr->seeds[tid]));
 	}
 	if (in < 0) return;
-	Agent::agentECMPtr[in].HA[write_t] =
-		Agent::agentECMPtr[in].HA[read_t] + static_cast<float>(amount);
+	Agent::agentECMPtr[in].HA[write_t]        += amount;
 #ifdef OPT_ECM
 	Agent::agentECMPtr[in].set_dirty();
 #endif
@@ -294,22 +316,29 @@ void Cell::cellFunction() {
 	/* 2. Migration  (Table 3, rule 1) */
 	this->cellSniff();
 
-	/* 3. Proliferation  (Table 3, rule 3) */
+	/* 3. Death  (Table 3, rule 2).
+	 * Runs before proliferation: apoptose() compares against the
+	 * liveCells/deadCells aggregate computed at the end of the previous tick,
+	 * so it must act on that same population. With proliferation first the
+	 * aggregate is stale by one day's births and the viability ratio drifts
+	 * above vr(t) by a growing margin. A cell that dies this tick also no
+	 * longer divides this tick. */
+	this->apoptose();
+	if (this->alive[write_t] == false) return;
+
+	/* 4. Proliferation  (Table 3, rule 3) */
 	this->proliferate();
 
-	/* 4-5. Only activated fibroblasts secrete (Figure 1C) */
+	/* 5-6. Only activated fibroblasts secrete (Figure 1C) */
 	if (this->activate[write_t]) {
-		this->cytokine_synthesis();  // Table 3, rules 4-8
-		this->ecm_synthesis();       // Table 3, rules 11-13
+		this->cytokine_synthesis();
+		this->ecm_synthesis();
 	}
 
-	/* 6. Death driven by the viability rate  (Table 3, rule 2) */
-	this->apoptose();
-
-	/* Advance the internal clock by one tick. */
 	if (this->life[read_t] >= 0)
 		this->life[write_t] = this->life[read_t] + 1;
 }
+
 
 void Cell::cellSniff() {
 	int speed = static_cast<int>(this->get_migration_speed());
@@ -329,21 +358,40 @@ void Cell::die() {
 	this->life[write_t] = -1;
 }
 
-/* Table 3, rule 2: vr = k3 ln(t) + k4 is a *survival* percentage. */
+/*
+ * Table 3, rule 2. Chen & Thibeault 2010 [54] Section 3.4 / Fig. 5 measure
+ * vr(t) as "the percentage of live cells in the total cell population"
+ * (63.7 % at day 3, 67 % at day 7) -- a snapshot ratio, not a daily hazard.
+ * Dead cells stay in the gel and stay in the denominator, which is what
+ * BMWorld::liveCells / (liveCells + deadCells) tracks. So treat vr(t) as a
+ * target live fraction and kill only the excess:
+ *     p_die = 1 - target / current_fraction
+ */
 void Cell::apoptose() {
-	if (fmod(BMWorld::reportHour(), 24.0) != 0) return;
-	if (BMWorld::reportHour() == 0) return;
-  
-	float vr = this->get_viability_rate();
-	float death_chance = 100.f - vr;
-	if (death_chance <= 0.f) return;
-	if (death_chance > 100.f) death_chance = 100.f;
-  
-	if (Agent::rollDice(death_chance)) {
-	  this->realDeath[write_t] = true;
-	  this->die();
+	/* No daily gate: vr(t) is defined continuously and the targeting formula
+	 * drives the live fraction to it at whatever interval it is evaluated.
+	 * Correcting once a day lets a full day of births accumulate first, which
+	 * biases the sampled viability 2-4 points above vr(t). */
+	const double t = BMWorld::reportDay();
+	// if (t < 1.0) return;                  // ln(t) undefined below one day
+
+	const double total = static_cast<double>(BMWorld::liveCells)
+					   + static_cast<double>(BMWorld::deadCells);
+	if (total <= 0.0) return;
+	const double current = static_cast<double>(BMWorld::liveCells) / total;
+	if (current <= 0.0) return;
+
+	const double target = this->get_viability_rate(t) / 100.0;
+	if (current <= target) return;
+
+	const double p_die = 1.0 - target / current;
+	if (Agent::rollDice(static_cast<float>(p_die * 100.0))) {
+		this->realDeath[write_t] = true;
+		this->die();
 	}
-  }
+}
+
+
 
 void Cell::copyAndInitialize(Agent* original, int dx, int dy, int dz) {
 	int in = this->index[read_t];
@@ -385,24 +433,24 @@ void Cell::proliferate() {
 	int in = this->index[read_t];
 	if (Agent::agentPatchPtr[in].type[read_t] != biomaterial) return;
   
-	const float hours_between = Fibroblast::proliferation[Fibroblast::PROLIFERATION_HOURS_BETWEEN]; // k6
-	if (hours_between <= 0) return;
-	if (fmod(BMWorld::reportHour(), hours_between) != 0) return;
-	if (BMWorld::reportHour() == 0) return;  // no division on the seeding tick
+	// const float hours_between = Fibroblast::proliferation[Fibroblast::PROLIFERATION_HOURS_BETWEEN]; // k6
+	// if (hours_between <= 0) return;
+	// if (fmod(BMWorld::reportHour(), hours_between) != 0) return;
+	// if (BMWorld::reportHour() == 0) return;  // no division on the seeding tick
+	if (intervals_elapsed(Fibroblast::proliferation[Fibroblast::PROLIFERATION_HOURS_BETWEEN]) == 0) return; // k6
 
 	if (this->doublings[read_t] >= this->get_max_doublings()) return;
 
 	float prob = this->get_prolif_prob();
 	if (prob <= 0) return;
   
-	if (Agent::rollDice(prob)) {
-	  this->hatchnewcell(1, this->type[read_t]);
+	if (Agent::rollDice(prob) && this->hatchnewcell(1, this->type[read_t]) > 0)
 	  this->doublings[write_t] = this->doublings[read_t] + 1;
-	}
+
 }
 
 float Cell::get_migration_speed()          { return 0; }
-float Cell::get_viability_rate()           { return 100; }
+float Cell::get_viability_rate(double)     { return 100; }
 float Cell::get_prolif_prob()              { return 0; }
 bool  Cell::should_activate(float)         { return false; }
 bool  Cell::should_deactivate()            { return false; }
@@ -412,7 +460,7 @@ void  Cell::create_elastin()               {}
 void  Cell::create_ha()                    {}
 
 
-void Cell::hatchnewcell(int number, int agentType, int here) {
+int Cell::hatchnewcell(int number, int agentType, int here) {
 	int newcells = 0;
 	const int x = this->ix[read_t];
 	const int y = this->iy[read_t];
@@ -467,6 +515,7 @@ void Cell::hatchnewcell(int number, int agentType, int here) {
 #endif
 		newcells++;
 	}
+	return newcells;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -494,12 +543,13 @@ float Fibroblast::get_migration_speed() {
                                                              : floor(patches);
 }
 
-/* Table 3, rule 2:  vr = k3 ln(t) + k4  [% surviving]. */
-float Fibroblast::get_viability_rate() {
-	const double t = sim_days_at_least_one();
-	return Fibroblast::viability[VIABILITY_TIME_EFFECT] * static_cast<float>(log(t))
-		   + Fibroblast::viability[VIABILITY_BIOMATERIAL_EFFECT];
+/* Table 3, rule 2:  vr = k3 ln(t) + k4  [% live cells in the total population]. */
+float Fibroblast::get_viability_rate(double t_days) {
+	if (t_days < 1.0) t_days = 1.0;          // ln(t) undefined below one day
+	return Fibroblast::viability[VIABILITY_TIME_EFFECT] * static_cast<float>(log(t_days))
+		 + Fibroblast::viability[VIABILITY_BIOMATERIAL_EFFECT];
 }
+
 
 /*
  * Table 3, rule 3:
@@ -624,9 +674,8 @@ void Fibroblast::create_cytokines() {
  *   else       -> k42 + Col/k43
  */
 void Fibroblast::create_collagen() {
-	const float hours = Fibroblast::collagenSynth[COLLAGEN_HOURS_BETWEEN];   // k32
-	if (hours <= 0) return;
-	if (fmod(BMWorld::reportHour(), hours) != 0) return;
+	const int n_events = intervals_elapsed(Fibroblast::collagenSynth[COLLAGEN_HOURS_BETWEEN]); // k32
+	if (n_events == 0) return;
   
 	const int in = this->index[read_t];
 	const float lTGF = this->patchChemConcentration(TGF, in);
@@ -659,7 +708,7 @@ void Fibroblast::create_collagen() {
 			 + col / safe_denominator(Fibroblast::collagenSynth[COLLAGEN_CHEMICAL_EFFECT]); // k43
 	}
   
-	this->depositCollagen(static_cast<int>(rate));
+	this->depositCollagen(rate * n_events);
 }
 
 /*
@@ -668,9 +717,8 @@ void Fibroblast::create_collagen() {
  *   Eln   = Eln_b ( (k47 log10(1+TGF) + k48) / (k49 (1+FGF+TNF)) + k50 )
  */
 void Fibroblast::create_elastin() {
-	const float hours = Fibroblast::collagenSynth[COLLAGEN_HOURS_BETWEEN];   // k32
-	if (hours <= 0) return;
-	if (fmod(BMWorld::reportHour(), hours) != 0) return;
+	const int n_events = intervals_elapsed(Fibroblast::collagenSynth[COLLAGEN_HOURS_BETWEEN]); // k32
+	if (n_events == 0) return;
   
 	const int in = this->index[read_t];
 	const float lTGF = this->patchChemConcentration(TGF, in);
@@ -689,7 +737,7 @@ void Fibroblast::create_elastin() {
 										* (1.f + lFGF + lTNF))
 				 + Fibroblast::elastinSynth[ELASTIN_BASELINE_RATE]);                  // k50
   
-	this->depositElastin(static_cast<int>(eln));
+	this->depositElastin(eln * n_events);
 }
 
 /*
@@ -700,9 +748,8 @@ void Fibroblast::create_elastin() {
  *   with probability k58 + HA/k59  -> deposit HA on the current patch
  */
 void Fibroblast::create_ha() {
-	const float hours = Fibroblast::haSynth[HA_HOURS_BETWEEN];   // k51
-	if (hours <= 0) return;
-	if (fmod(BMWorld::reportHour(), hours) != 0) return;
+	const int n_events = intervals_elapsed(Fibroblast::haSynth[HA_HOURS_BETWEEN]); // k51
+	if (n_events == 0) return;
   
 	const int in = this->index[read_t];
 	const float lTGF = this->patchChemConcentration(TGF, in);
@@ -720,16 +767,18 @@ void Fibroblast::create_ha() {
   
 	if (ha <= 0.f) return;
   
-	/* With probability HA + k57: move, then produce HA. */
-	if (Agent::rollDice(lHA + Fibroblast::haSynth[HA_MOVE_PROBABILITY])) {       // k57
-	  this->wiggle();
-	  this->depositHA(static_cast<int>(ha), 1);
-	}
-  
-	/* With probability k58 + HA/k59: produce HA in the same patch. */
-	if (Agent::rollDice(Fibroblast::haSynth[HA_SAME_PATCH_PROBABILITY]           // k58
-						+ lHA / safe_denominator(Fibroblast::haSynth[HA_SAME_PATCH_EFFECT]))) { // k59
-	  this->depositHA(static_cast<int>(ha), 1);
+	for (int e = 0; e < n_events; e++) {
+		/* With probability HA + k57: move, then produce HA. */
+		if (Agent::rollDice(lHA + Fibroblast::haSynth[HA_MOVE_PROBABILITY])) {       // k57
+		this->wiggle();
+		this->depositHA(ha, 1);
+		}
+	
+		/* With probability k58 + HA/k59: produce HA in the same patch. */
+		if (Agent::rollDice(Fibroblast::haSynth[HA_SAME_PATCH_PROBABILITY]           // k58
+							+ lHA / safe_denominator(Fibroblast::haSynth[HA_SAME_PATCH_EFFECT]))) { // k59
+		this->depositHA(ha, 1);
+		}
 	}
 }
 

@@ -381,6 +381,7 @@ public:
   static float meshSize;  // mesh = 15000 / p, um^-1
   static float Q;         // Swelling ratio, % w/w
   static float massLoss;  // w_l, mass loss of wet weight, %
+  static float massLoss0;
   static float pXL;       // rho_XL, crosslinking density, mmol/mL
 
   static float HAww;  // HA concentration, % w/w of the polymer

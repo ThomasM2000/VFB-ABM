@@ -76,7 +76,7 @@
      void depositHA(float amount, int here);
  
      /** Hatches `number` new cells of `agentType` on unoccupied neighbours. */
-     virtual void hatchnewcell(int number, int agentType, int here = 0);
+     virtual int hatchnewcell(int number, int agentType, int here = 0);
  
      /* ---------------------------------------------------------------------- */
      /*                            STATIC VARIABLES                            */
@@ -89,8 +89,9 @@
      /* ------------------------- Agent-rule hooks ------------------------- */
      /** Table 3 rule 1, v = -k1 ln(E) + k2, returned in patches/tick. */
      virtual float get_migration_speed();
-     /** Table 3 rule 2, vr = k3 ln(t) + k4, a survival percentage. */
-     virtual float get_viability_rate();
+     /** Table 3 rule 2, vr = k3 ln(t) + k4: the percentage of live cells in the
+      *  total population at day t (Chen & Thibeault 2010, Fig. 5). */
+     virtual float get_viability_rate(double t_days);
      /** Table 3 rule 3, returned as a percentage for rollDice(). */
      virtual float get_prolif_prob();
      /** Table 3 rules 9/10; return true to change activation state. */
@@ -279,7 +280,7 @@
  
    protected:
      float get_migration_speed() override;
-     float get_viability_rate() override;
+     float get_viability_rate(double t_days) override;
      float get_prolif_prob() override;
      bool should_activate(float patchTGF) override;
      bool should_deactivate() override;

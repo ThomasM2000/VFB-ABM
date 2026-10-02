@@ -58,6 +58,7 @@ float BMWorld::poreWidth = 0;   // um
 float BMWorld::meshSize  = 0;   // um^-1
 float BMWorld::Q         = 0;   // % w/w
 float BMWorld::massLoss  = 0;   // %
+float BMWorld::massLoss0 = 0;   // %
 float BMWorld::pXL       = 0;   // mmol/mL
 
 float BMWorld::HAww  = 0;
@@ -713,7 +714,7 @@ void BMWorld::executeCells() {
 
 void BMWorld::executeECMs() {
   cerr << " ECM function  " << endl;
-  int numPatches = (nx - 1) + (ny - 1) * nx + (nz - 1) * nx * ny;
+  const int numPatches = nx * ny * nz;
 #pragma omp parallel for
   for (int in = 0; in < numPatches; in++) {
     if (worldECM[in].empty[read_t] == false)
@@ -911,12 +912,12 @@ void BMWorld::updateCells() {
   //	prevCells = liveCells;
   // }
 
-  // deadCells += dcells;
-  if (prevCells - cells.actualSize() >= 0) {
-    deadCells += prevCells - cells.actualSize();
-  } else if (prevCells - cells.actualSize() < 0) {
-    deadCells += 0;
-  }
+  deadCells += dcells;
+  // if (prevCells - cells.actualSize() >= 0) {
+  //   deadCells += prevCells - cells.actualSize();
+  // } else if (prevCells - cells.actualSize() < 0) {
+  //   deadCells += 0;
+  // }
   // deadCells += prevCells - cells.actualSize();
   Cell::numOfCells = cells.actualSize();
   // cout << " number of dead cells in this tick " << prevCells -
@@ -1233,14 +1234,27 @@ void BMWorld::sproutAgentInWorld(int num, int patchType,
                 + BMWorld::MassLoss[MASSLOSS_BASELINE];                        // c16
 
     if (w_t < 0.f) w_t = 0.f;
-
-    /* Degrade the corresponding fraction of biomaterial patches. */
-    if (w_t > BMWorld::massLoss) {
-      const float changeInPatches =
-          0.01f * (w_t - BMWorld::massLoss) * BMWorld::initialPatches;
-      this->degradebiomaterial(static_cast<int>(changeInPatches));
+        /* The fit has a non-zero intercept (w_l(0) = c15 HAww + c16 = 65.3 %). That
+     * is a property of the regression, not mass the construct has already lost.
+     * Without this guard the t = 0 call degrades 65 % of the patches before the
+     * first tick; every cell on a degraded patch then fails the
+     * `type != biomaterial` test in proliferate() and ecm_synthesis() for the
+     * rest of the run. */
+    if (BMWorld::clock == 0) {
+      BMWorld::massLoss = w_t;
+      BMWorld::massLoss0 = w_t;
+      return;
     }
-    BMWorld::massLoss = w_t;
+
+    /* Degrade against the cumulative target so the per-tick float->int
+     * truncation does not accumulate. massLoss0 is w_l at t = 0 (see guard). */
+     const int target = static_cast<int>(std::lround(
+      0.01 * (w_t - BMWorld::massLoss0) * BMWorld::initialPatches));
+     const int already = BMWorld::initialPatches - this->countPatchType(biomaterial);
+     if (target > already)
+       this->degradebiomaterial(target - already);
+     BMWorld::massLoss = w_t;
+
   }
 // #ifdef PEPTIDE_BM
 //   void BMWorld::updateE() {
@@ -1264,9 +1278,9 @@ void BMWorld::sproutAgentInWorld(int num, int patchType,
     int zmax = nz;
     int patchType = biomaterial;
     vector<int> patchlist;
-    int *reservoir = new int[numOfPatches];
-    for (int i = 0; i < numOfPatches; i++)
-      reservoir[i] = -1;
+    // int *reservoir = new int[numOfPatches];
+    // for (int i = 0; i < numOfPatches; i++)
+    //   reservoir[i] = -1;
     int in, agentIndex, max;
     int count = 0;
 
@@ -1287,29 +1301,39 @@ void BMWorld::sproutAgentInWorld(int num, int patchType,
       }
     }
 
-    // Choose random patches from patch list
-    for (int i = 0; i < numOfPatches; i++) {
-      if (patchlist.size() == 0) { // No available patches
-        // cout << " biomaterial degrade error, no available patch within bounds! " <<
-        // endl;
-        delete[] reservoir;
-        return;
-      }
-      int randnumber = rand() % patchlist.size();
-      reservoir[i] = patchlist[randnumber]; // Prepare 'num' random patches
-    }
+    // // Choose random patches from patch list
+    // for (int i = 0; i < numOfPatches; i++) {
+    //   if (patchlist.size() == 0) { // No available patches
+    //     // cout << " biomaterial degrade error, no available patch within bounds! " <<
+    //     // endl;
+    //     delete[] reservoir;
+    //     return;
+    //   }
+    //   int randnumber = rand() % patchlist.size();
+    //   reservoir[i] = patchlist[randnumber]; // Prepare 'num' random patches
+    // }
 
-    // Degrade 'numOfPatches" number of biomaterial patches in reservoir list
-    for (int i = 0; i < numOfPatches; i++) {
-      int in = reservoir[i];
-      if (in < 0 || in > (nx - 1) + (ny - 1) * nx + (nz - 1) * nx * ny)
-        continue;
-      BMWorld::worldPatch[in].type[write_t] = nothing;
+    // // Degrade 'numOfPatches" number of biomaterial patches in reservoir list
+    // for (int i = 0; i < numOfPatches; i++) {
+    //   int in = reservoir[i];
+    //   if (in < 0 || in > (nx - 1) + (ny - 1) * nx + (nz - 1) * nx * ny)
+    //     continue;
+    //   BMWorld::worldPatch[in].type[write_t] = nothing;
+    //   BMWorld::worldPatch[in].color[write_t] = cnothing;
+    //   BMWorld::worldPatch[in].dirty = true;
+    //   count++;
+    // }
+    // delete[] reservoir;
+    if (numOfPatches <= 0 || patchlist.empty()) return;
+    std::random_shuffle(patchlist.begin(), patchlist.end());
+    const int n = std::min<int>(numOfPatches, static_cast<int>(patchlist.size()));
+    for (int i = 0; i < n; i++) {
+      const int in = patchlist[i];
+      BMWorld::worldPatch[in].type[write_t]  = nothing;
       BMWorld::worldPatch[in].color[write_t] = cnothing;
       BMWorld::worldPatch[in].dirty = true;
-      count++;
     }
-    delete[] reservoir;
+
   }
 #endif // MODEL_SCAFFOLD
 
@@ -1467,7 +1491,7 @@ void BMWorld::sproutAgentInWorld(int num, int patchType,
   }
 
   void BMWorld::count_env(map<string, float> & env_counts) {
-    for (int in = 0; in < (nx - 1) + (ny - 1) * nx + (nz - 1) * nx * ny; in++) {
+    for (int in = 0; in < nx * ny * nz; in++) {
       env_counts["ncollagen"] += this->worldECM[in].ncollagen[read_t];
       env_counts["nelastin"] += this->worldECM[in].nelastin[read_t];
       env_counts["HA"] += this->worldECM[in].HA[read_t];
@@ -1509,10 +1533,11 @@ void BMWorld::sproutAgentInWorld(int num, int patchType,
 
   // private helpers
   float BMWorld::calculate_viability() {
-    if (this->clock == 0)
-      return 100.0f;
-    return (static_cast<float>(liveCells) / (liveCells + deadCells)) * 100;
+    const float total = liveCells + deadCells;
+    if (total <= 0.f) return 100.0f;      // 播种 tick，还没有统计数据
+    return (liveCells / total) * 100.f;
   }
+
 
   // float BMWorld::calculate_pct_differentiated(map<string, int> & agent_counts) {
   //   return (static_cast<float>(agent_counts["NP"]) / get_total_agent_count()) *

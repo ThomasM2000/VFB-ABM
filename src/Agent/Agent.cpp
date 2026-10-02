@@ -80,15 +80,29 @@ int Agent::getIndex() {
 	return this->index[read_t];
 }
 
+// bool Agent::rollDice(float percent) {
+// 	int tid = 0;
+// 		#ifdef _OMP
+// 			tid = omp_get_thread_num();	// Get thread id in order to access the seed that belongs to this thread
+// 		#endif
+// 	int randNum = rand_r(&(agentWorldPtr->seeds[tid]))%100;
+// 	if (randNum < percent) return 1;
+// 	else return 0;
+// }
 bool Agent::rollDice(float percent) {
+	if (percent <= 0.f)   return false;
+	if (percent >= 100.f) return true;
 	int tid = 0;
-		#ifdef _OMP
-			tid = omp_get_thread_num();	// Get thread id in order to access the seed that belongs to this thread
-		#endif
-	int randNum = rand_r(&(agentWorldPtr->seeds[tid]))%100;
-	if (randNum < percent) return 1;
-	else return 0;
+	#ifdef _OMP
+		tid = omp_get_thread_num();
+	#endif
+	/* Uniform in [0, 100); the old `% 100` rounded every probability up to a
+	 * whole percent, so k28/k30/k31 = 0.5/0.2/0.2 % all ran as 1 %. */
+	const double u = rand_r(&(agentWorldPtr->seeds[tid]))
+	               / (static_cast<double>(RAND_MAX) + 1.0);
+	return u * 100.0 < percent;
 }
+
 
 float Agent::displacementFromSeed() const {
 	const float dx = static_cast<float>(this->ix[read_t] - this->ix0);
@@ -377,6 +391,11 @@ bool Agent::moveTowardChemotaxis(int radius) {
 					if (ix + deltax < 0 || ix + deltax >= nx || iy + deltay < 0 || iy + deltay >= ny || iz + deltaz < 0 || iz + deltaz >= nz) continue;
 
 					int in = (ix + deltax) + (iy + deltay)*nx + (iz + deltaz)*nx*ny;
+
+					/* Stay inside the construct. wiggle() already does this; a cell
+					 * that chemotaxes onto a degraded (nothing) patch can never
+					 * proliferate or synthesise ECM again, and has no way back. */
+					if (Agent::agentPatchPtr[in].type[read_t] != biomaterial) continue;
 					const float neighbor = this->patchChemotaxis(in);
 					if (neighbor > highestchem) {
 						highestchem = neighbor;
@@ -395,6 +414,11 @@ bool Agent::moveTowardChemotaxis(int radius) {
 					if (ix + deltax < 0 || ix + deltax >= nx || iy + deltay < 0 || iy + deltay >= ny || iz + deltaz < 0 || iz + deltaz >= nz) continue;
 
 					int in = (ix + deltax) + (iy + deltay)*nx + (iz + deltaz)*nx*ny;
+
+					/* Stay inside the construct. wiggle() already does this; a cell
+					 * that chemotaxes onto a degraded (nothing) patch can never
+					 * proliferate or synthesise ECM again, and has no way back. */
+					if (Agent::agentPatchPtr[in].type[read_t] != biomaterial) continue;
 					const float neighbor = this->patchChemotaxis(in);
 					if (neighbor > highestchem) {
 						highestchem = neighbor;
@@ -408,7 +432,7 @@ bool Agent::moveTowardChemotaxis(int radius) {
 	#endif
 
 	if (dx == 0 && dy == 0 && dz == 0) return false;
-	int newIndex = (ix + dx) + (iy + dy)*nx + (iz + dz)*nx*ny;
+	// int newIndex = (ix + dx) + (iy + dy)*nx + (iz + dz)*nx*ny;
 	return this->move(dx, dy, dz, read_index);
 }
 

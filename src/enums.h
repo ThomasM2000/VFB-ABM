@@ -54,32 +54,17 @@ enum color_t {
   co2 = 195
 };
 
-/** Species ids and matching grid channel indices (see ChemicalEnvironment). */
-enum chemical_t {
-// p: patch, d: delta (change during the tick)
-  /** Species identifiers for agent/world API. */
+/** Species identifiers for the agent/world API. Grid channel indices live in
+ *  simulation_config.json (chemistry.channels), not here. */
+ enum chemical_t {
   TNF = 0,
   TGF = 1,
   FGF = 2,
   IL6 = 3,
   IL8 = 4,
-  IL10 = 5,
-
-  pTNF = 0,
-  pTGF = 1,
-  pFGF = 2,
-  pIL6 = 3,
-  pIL8 = 4,
-  pIL10 = 5,
-
-  dTNF = 6,
-  dTGF = 7,
-  dFGF = 8,
-  dIL6 = 9,
-  dIL8 = 10,
-  dIL10 = 11,
-  pcellgrad = 12
+  IL10 = 5
 };
+
 
 // Types of patches:
 enum patches_t {
