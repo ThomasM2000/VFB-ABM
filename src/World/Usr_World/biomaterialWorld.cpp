@@ -1418,6 +1418,8 @@ void BMWorld::sproutAgentInWorld(int num, int patchType,
       } 
     }
     Cell::numOfCells = cells.actualSize();
+    BMWorld::liveCells = static_cast<float>(cells.actualSize());
+    BMWorld::deadCells = 0.f;
   }
 
   int BMWorld::userInput() {
@@ -1513,7 +1515,11 @@ void BMWorld::sproutAgentInWorld(int num, int patchType,
       << env_counts["HA"]        << "," << env_counts["fHA"]      << ",";
 
       /* Cells */
-      file << get_total_agent_count() << "," << liveCells << "," << deadCells << ","
+      /* Total = live + cumulative dead: every cell the gel contains, as counted
+       * by PicoGreen (2.2.6) and as the LIVE/DEAD denominator (2.2.7). Dead
+       * agents are deleted from `cells`, so actualSize() alone equals Live. */
+      file << (liveCells + deadCells) << "," << liveCells << "," << deadCells << ","
+
       << agent_counts["Fibroblast"] << ","
       << agent_counts["Activated Fibroblast"] << ",";
 
@@ -1574,10 +1580,10 @@ void BMWorld::sproutAgentInWorld(int num, int patchType,
          << "HA (ug)" << ","
          << "fHA (ug)" << ","
          /* Cells */
-         << "Total Cells" << ","
+         << "Total Cells (live + dead)" << ","
          << "Live Cells" << ","
-         << "Dead Cells" << ","
-         << "Fibroblast" << ","
+         << "Dead Cells (cumulative)" << ","
+         << "Unactivated Fibroblast" << ","
          << "Activated Fibroblast" << ","
          /* Scaffold - Manuscript Table 4 */
          << "Elastic Modulus (Pa)" << ","
