@@ -493,7 +493,7 @@ int Cell::hatchnewcell(int number, int agentType, int here) {
 			in = lx + ly * nx + lz * nx * ny;
 			/* Only divide into an unoccupied biomaterial patch. */
 			if (Agent::agentPatchPtr[in].type[read_t] != biomaterial) continue;
-			if (Agent::agentPatchPtr[in].isOccupied()) continue;
+			if (Agent::agentPatchPtr[in].isOccupiedWrite()) continue;
 		} else {
 			lx = x; ly = y; lz = z;
 			in = this->getIndex();

@@ -1011,15 +1011,16 @@ void BMWorld::sproutAgentInArea(int num, int patchType, int agentType, int xmin,
       }
     }
   }
-  for (int i = 0; i < num; i++) {
-    if (patchlist.size() == 0) { // No available patches
-      cout << " sprout agent error, no available patch within bounds! " << endl;
-      delete[] reservoir;
-      return;
-    }
-    int randnumber = rand() % patchlist.size();
-    reservoir[i] = patchlist[randnumber]; // Prepare 'num' random patches
+  /* Sample without replacement so no two agents share a patch. */
+  std::random_shuffle(patchlist.begin(), patchlist.end());
+  if (static_cast<int>(patchlist.size()) < num) {
+    cout << " sprout agent warning: only " << patchlist.size()
+         << " free patches for " << num << " agents" << endl;
+    num = static_cast<int>(patchlist.size());
   }
+  for (int i = 0; i < num; i++)
+    reservoir[i] = patchlist[i];
+
 
   // Sprout agent on each patch in reservoir
   for (int i = 0; i < num; i++) {
