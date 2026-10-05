@@ -46,6 +46,13 @@ if [[ "${PARAVIEW:-0}" -eq 1 ]]; then
   PARAVIEW_FLAG=(--paraview)
 fi
 
+SEED_FLAG=()
+if [[ -n "${SEED:-}" ]]; then
+  SEED_FLAG=(--seed "${SEED}")
+elif [[ -n "${SLURM_ARRAY_TASK_ID:-}" ]]; then
+  SEED_FLAG=(--seed "$((SLURM_ARRAY_TASK_ID + 1))")   # one seed per array task
+fi
+
 echo "Job ${SLURM_JOB_ID:-?} starting on $(hostname) at $(date -Iseconds)"
 echo "  REPO_ROOT=${REPO_ROOT}"
 echo "  TESTRUN=${TESTRUN}"

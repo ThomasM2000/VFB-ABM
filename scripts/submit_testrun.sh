@@ -38,6 +38,7 @@ OUTPUT_DIR=""
 OUTPUTFILE=""
 DRY_RUN=0
 PARAVIEW=0
+SEED=""
 GPUS_EXPLICIT=0
 TIME_EXPLICIT=0
 QUIET_MAIL=0
@@ -231,6 +232,11 @@ while [[ $# -gt 0 ]]; do
       OUTPUT_DIR="$2"
       shift 2
       ;;
+    --seed)
+      [[ $# -ge 2 ]] || die "missing value for $1"
+      SEED="$2"
+      shift 2
+      ;;
     --paraview)
       PARAVIEW=1
       shift
@@ -291,6 +297,9 @@ if [[ -n "${OUTPUT_DIR}" ]]; then
 fi
 if [[ -n "${OUTPUTFILE}" ]]; then
   EXPORT_VARS="${EXPORT_VARS},OUTPUTFILE=${OUTPUTFILE}"
+fi
+if [[ -n "${SEED}" ]]; then
+  EXPORT_VARS="${EXPORT_VARS},SEED=${SEED}"
 fi
 
 if [[ "${QUIET_MAIL}" -eq 1 ]]; then
