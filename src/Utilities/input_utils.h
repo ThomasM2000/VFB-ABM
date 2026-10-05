@@ -28,6 +28,7 @@ namespace util {
  * MODEL OPTIONS                                                         *
  *************************************************************************/
 int numTicks; // Desired number of ticks for the simulation (1 tick = 30 min)
+unsigned randomSeed = 25234; // --seed: base of every RNG stream (Section 2.5 replicates)
 float patchWidth;  // Desired width of each patch in millimeters
 float worldXwidth; // Desired x-dimension width of the world in millimeters
 float worldYwidth; // Desired y-dimension width of the world in millimeters
@@ -184,6 +185,8 @@ void processOptions(int argc, char **argv) {
       // fixed at 0.01mm
       // maintain 1 cell max per patch occupancy
       // patchWidth = atof(argv[++i]);
+    } else if (!strcmp(option_string, "--seed")) {
+      randomSeed = atoi(argv[++i]);
     } else if (!strcmp(option_string, "--wxw")) {
       worldXwidth = atof(argv[++i]);
     } else if (!strcmp(option_string, "--wyw")) {
@@ -216,6 +219,7 @@ void processOptions(int argc, char **argv) {
       cout << "Options: " << endl;
       cout << "   --numticks:      Number of ticks" << endl;
       // cout << "   --patchwidth:    Patch width    (mm)" << endl;
+      cout << "   --seed:          Random seed (replicate id)" << endl;
       cout << "   --wxw:           World width    (mm)" << endl;
       cout << "   --wyw:           World length   (mm)" << endl;
       cout << "   --wzw:           World height   (mm)" << endl;
@@ -326,6 +330,7 @@ inline void writeRunParamsJson(int argc, char **argv) {
 
   out << "  \"simulation\": {\n";
   out << "    \"num_ticks\": " << numTicks << ",\n";
+  out << "    \"random_seed\": " << randomSeed << ",\n";
   out << "    \"patch_width_mm\": " << patchWidth << ",\n";
   out << "    \"world_x_width_mm\": " << worldXwidth << ",\n";
   out << "    \"world_y_width_mm\": " << worldYwidth << ",\n";
@@ -385,6 +390,7 @@ inline void writeRunTimingJson(long total_tick_ms, int num_ticks,
 void printOptions() {
   cout << "ABM Parameters:" << endl;
   cout << "	numTicks:	" << numTicks << endl;
+  cout << "	randomSeed:	" << randomSeed << endl;
   cout << "	patchWidth:	" << patchWidth << " mm" << endl;
   cout << "	worldXwidth:	" << worldXwidth << " mm" << endl;
   cout << "	worldYwidth:	" << worldYwidth << " mm" << endl;

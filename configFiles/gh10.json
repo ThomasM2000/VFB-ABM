@@ -23,22 +23,16 @@
     "description": "Diffusion, baselines, and tick length.",
     "tick_interval_minutes": 30,
     "channels": {
-      "count": 13,
-      "chemotaxis": 12,
+      "count": 19,
+      "chemotaxis": 18,
       "channel_names": {
-        "0": "pTNF",
-        "1": "pTGF",
-        "2": "pFGF",
-        "3": "pIL6",
-        "4": "pIL8",
-        "5": "pIL10",
-        "6": "dTNF",
-        "7": "dTGF",
-        "8": "dFGF",
-        "9": "dIL6",
-        "10": "dIL8",
-        "11": "dIL10",
-        "12": "pcellgrad"
+        "0": "pTNF",  "1": "pTGF",  "2": "pFGF",
+        "3": "pIL6",  "4": "pIL8",  "5": "pIL10",
+        "6": "dTNF",  "7": "dTGF",  "8": "dFGF",
+        "9": "dIL6", "10": "dIL8", "11": "dIL10",
+        "12": "sTNF","13": "sTGF","14": "sFGF",
+        "15": "sIL6","16": "sIL8","17": "sIL10",
+        "18": "pcellgrad"
       }
     },
     "merge": {
@@ -53,54 +47,24 @@
       "IL10": 0
     },
     "species": [
-      {
-        "id": 0,
-        "name": "TNF",
-        "base_diffusivity_mm2_per_min": 0.00018,
-        "half_life_minutes": 33.6, // Table 5
-        "concentration_channel": 0,
-        "diffused_channel": 6
-      },
-      {
-        "id": 1,
-        "name": "TGF",
-        "base_diffusivity_mm2_per_min": 0.000156,
-        "half_life_minutes": 2.7, // Table 5
-        "concentration_channel": 1,
-        "diffused_channel": 7
-      },
-      {
-        "id": 2,
-        "name": "FGF",
-        "base_diffusivity_mm2_per_min": 0.000177,
-        "half_life_minutes": 46, // Table 5
-        "concentration_channel": 2,
-        "diffused_channel": 8
-      },
-      {
-        "id": 3,
-        "name": "IL6",
-        "base_diffusivity_mm2_per_min": 0.000168,
-        "half_life_minutes": 103, // Table 5
-        "concentration_channel": 3,
-        "diffused_channel": 9
-      },
-      {
-        "id": 4,
-        "name": "IL8",
-        "base_diffusivity_mm2_per_min": 0.000228,
-        "half_life_minutes": 24, // Table 5
-        "concentration_channel": 4,
-        "diffused_channel": 10
-      },
-      {
-        "id": 5,
-        "name": "IL10",
-        "base_diffusivity_mm2_per_min": 0.000139,
-        "half_life_minutes": 60, // Table 5
-        "concentration_channel": 5,
-        "diffused_channel": 11
-      }
+      { "id": 0, "name": "TNF",  "base_diffusivity_mm2_per_min": 0.00018,
+      "half_life_minutes": 33.6,
+      "concentration_channel": 0, "diffused_channel": 6,  "secretion_channel": 12 },
+    { "id": 1, "name": "TGF",  "base_diffusivity_mm2_per_min": 0.000156,
+      "half_life_minutes": 2.7,
+      "concentration_channel": 1, "diffused_channel": 7,  "secretion_channel": 13 },
+    { "id": 2, "name": "FGF",  "base_diffusivity_mm2_per_min": 0.000177,
+      "half_life_minutes": 46,
+      "concentration_channel": 2, "diffused_channel": 8,  "secretion_channel": 14 },
+    { "id": 3, "name": "IL6",  "base_diffusivity_mm2_per_min": 0.000168,
+      "half_life_minutes": 103,
+      "concentration_channel": 3, "diffused_channel": 9,  "secretion_channel": 15 },
+    { "id": 4, "name": "IL8",  "base_diffusivity_mm2_per_min": 0.000228,
+      "half_life_minutes": 24,
+      "concentration_channel": 4, "diffused_channel": 10, "secretion_channel": 16 },
+    { "id": 5, "name": "IL10", "base_diffusivity_mm2_per_min": 0.000139,
+      "half_life_minutes": 60,
+      "concentration_channel": 5, "diffused_channel": 11, "secretion_channel": 17 }
     ]
   },
   "biology": {

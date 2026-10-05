@@ -84,9 +84,10 @@ peptideCondition IKVAV = {2.9067, 5.4795, 42.56};
 #endif
 
 BMWorld::BMWorld(double length, double width, double height, double plength) {
-  // Generate random seeds:
+  // Random seeds from --seed so replicate runs differ (Section 2.5).
+  srand(util::randomSeed);                    // rand() and random_shuffle()
   for (int i = 0; i < NUM_THREAD; i++)
-    seeds[i] = 25234 + 17 * i;
+    seeds[i] = util::randomSeed + 17 * i;     // per-thread rand_r() streams
 
   // Allocate memory for local lists of cell pointers to add:
   for (int i = 0; i < MAX_NUM_THREADS; i++)
