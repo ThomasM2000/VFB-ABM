@@ -48,7 +48,7 @@ WorldInitParams load_world_init_config(const std::string &path)
 
   const json &section = root.at("world_init");
   reject_unknown_keys(
-      section, {"description", "fibroblast_count", "biomaterial", "initial_ecm"},
+      section, {"description", "fibroblast_count", "biomaterial", "initial_ecm", "initial_viability"},
       "world_init");
 
   WorldInitParams cfg;
@@ -56,6 +56,14 @@ WorldInitParams load_world_init_config(const std::string &path)
   if (cfg.fibroblast_count < 0)
     throw std::invalid_argument(
         "world_init config: fibroblast_count must be >= 0");
+  
+  if (section.contains("initial_viability")) {
+    cfg.initial_viability = section.at("initial_viability").get<double>();
+    if (cfg.initial_viability <= 0.0 || cfg.initial_viability > 1.0)
+      throw std::invalid_argument(
+          "world_init config: initial_viability must be in (0, 1]");
+  }
+
 
   const json &bm = section.at("biomaterial");
   reject_unknown_keys(bm,
@@ -79,7 +87,7 @@ WorldInitParams load_world_init_config(const std::string &path)
     const json &ecm = section.at("initial_ecm");
     reject_unknown_keys(ecm,
                         {"description", "collagen_per_patch",
-                          "elastin_per_patch", "ha_per_patch", "initial_viability"},
+                          "elastin_per_patch", "ha_per_patch"},
                         "world_init.initial_ecm");
     if (ecm.contains("collagen_per_patch"))
       cfg.initial_ecm.collagen_per_patch = ecm.at("collagen_per_patch").get<double>();
@@ -87,9 +95,6 @@ WorldInitParams load_world_init_config(const std::string &path)
       cfg.initial_ecm.elastin_per_patch = ecm.at("elastin_per_patch").get<double>();
     if (ecm.contains("ha_per_patch"))
       cfg.initial_ecm.ha_per_patch = ecm.at("ha_per_patch").get<double>();
-    if (section.contains("initial_viability"))
-      cfg.initial_viability = section.at("initial_viability").get<double>();
-    
   }
 
   return cfg;
