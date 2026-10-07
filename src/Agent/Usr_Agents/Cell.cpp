@@ -351,7 +351,7 @@ void Cell::cellSniff() {
 }
 
 void Cell::die() {
-	int in = this->index[read_t];
+	int in = isModified(this->index) ? this->index[write_t] : this->index[read_t];
 	Agent::agentPatchPtr[in].clearOccupied();
 	Agent::agentPatchPtr[in].occupiedby[write_t] = nothing;
 	this->alive[write_t] = false;

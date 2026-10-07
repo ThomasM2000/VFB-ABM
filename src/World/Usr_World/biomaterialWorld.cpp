@@ -892,10 +892,10 @@ void BMWorld::updateCells() {
       // Remove dead cells
     } else if (cell->isAlive() == false) {
       // Get residing patch index and update its occupancy
-      int in = cell->getIndex();
-      this->worldPatch[in].clearOccupied();
-      this->worldPatch[in].occupiedby[write_t] = nothing;
-      this->worldPatch[in].dirty = true;
+      // int in = cell->getIndex();
+      // this->worldPatch[in].clearOccupied();
+      // this->worldPatch[in].occupiedby[write_t] = nothing;
+      // this->worldPatch[in].dirty = true;
       /* Added by MM to check types of cell stages and subtract from respective
        * counters: */
       if (typeid(*cell) == typeid(Fibroblast)) {
@@ -956,6 +956,10 @@ void BMWorld::updateCells() {
     fvec_ptr->clear();
   }
 #endif
+  if (liveCells > nx * ny * nz) {
+    cerr << "ERROR: " << liveCells << " live cells exceed " << nx * ny * nz
+         << " patches (agents stacked on one patch)" << endl;
+  }
   prevCells = cells.actualSize();
 }
 
