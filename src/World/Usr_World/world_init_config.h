@@ -44,6 +44,7 @@ struct WorldInitParams {
    * 0 falls back to the in vitro density of 1e6 cells/mL (Section 2.2.3).
    */
   int fibroblast_count = 0;
+  double initial_viability = 1.0;
   WorldInitBiomaterialParams biomaterial;
   WorldInitInitialEcmParams initial_ecm;
 };

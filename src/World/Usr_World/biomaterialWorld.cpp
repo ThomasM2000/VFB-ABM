@@ -512,8 +512,8 @@ void BMWorld::initializeECM() {
     this->worldECM[in].isEmpty();
   }
 
-  cout << "Initial ECM per patch (ug): collagen " << col0 << ", elastin " << eln0
-       << ", HA " << ha0 << "  -> construct totals (ug): "
+  cout << "Initial ECM per patch (pg): collagen " << col0 << ", elastin " << eln0
+       << ", HA " << ha0 << "  -> construct totals (pg): "
        << static_cast<double>(col0) * totalPatches << ", "
        << static_cast<double>(eln0) * totalPatches << ", "
        << static_cast<double>(ha0) * totalPatches << endl;
@@ -1425,13 +1425,17 @@ void BMWorld::sproutAgentInWorld(int num, int patchType,
     }
     Cell::numOfCells = cells.actualSize();
     BMWorld::liveCells = static_cast<float>(cells.actualSize());
-    BMWorld::deadCells = 0.f;
+    /* Day-0 dead cells implied by the measured viability (LIVE/DEAD, 2.2.7). */
+    const double v0 = this->initialViability;
+    BMWorld::deadCells = (v0 > 0.0 && v0 < 1.0)
+        ? static_cast<float>(BMWorld::liveCells * (1.0 - v0) / v0) : 0.f;
   }
 
   int BMWorld::userInput() {
     const std::string config_path = util::getSimulationConfigPath();
     const WorldInitParams cfg = load_world_init_config(config_path);
 
+    this->initialViability = cfg.initial_viability;
     this->initialCells.assign(1, cfg.fibroblast_count);
     this->initialCollagenPerPatch = cfg.initial_ecm.collagen_per_patch;
     this->initialElastinPerPatch  = cfg.initial_ecm.elastin_per_patch;
@@ -1581,10 +1585,10 @@ void BMWorld::sproutAgentInWorld(int num, int patchType,
          << "Total IL8 (pg)" << ","
          << "Total IL10 (pg)" << ","
          /* ECM - Manuscript Table 2 */
-         << "Collagen (ug)" << ","
-         << "Elastin (ug)" << ","
-         << "HA (ug)" << ","
-         << "fHA (ug)" << ","
+         << "Collagen (pg)" << ","
+         << "Elastin (pg)" << ","
+         << "HA (pg)" << ","
+         << "fHA (pg)" << ","
          /* Cells */
          << "Total Cells (live + dead)" << ","
          << "Live Cells" << ","

@@ -523,6 +523,7 @@ public:
   static constexpr double kTickIntervalMinutes = 30.0;
 
   double tick_interval_minutes() const;
+  double initialViability = 1.0;
 
 protected:
   // --- output file hooks ---
