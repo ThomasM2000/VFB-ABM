@@ -1503,13 +1503,21 @@ void BMWorld::sproutAgentInWorld(int num, int patchType,
   }
 
   void BMWorld::count_env(map<string, float> & env_counts) {
+    /* Accumulate in double: summing ~8e6 per-patch floats into a float drifts
+     * by a few percent once the total reaches ~1e6 (rounding of each add). */
+    double col = 0.0, eln = 0.0, ha = 0.0, fha = 0.0;
     for (int in = 0; in < nx * ny * nz; in++) {
-      env_counts["ncollagen"] += this->worldECM[in].ncollagen[read_t];
-      env_counts["nelastin"] += this->worldECM[in].nelastin[read_t];
-      env_counts["HA"] += this->worldECM[in].HA[read_t];
-      env_counts["fHA"] += this->worldECM[in].fHA[read_t];
+      col += this->worldECM[in].ncollagen[read_t];
+      eln += this->worldECM[in].nelastin[read_t];
+      ha  += this->worldECM[in].HA[read_t];
+      fha += this->worldECM[in].fHA[read_t];
     }
+    env_counts["ncollagen"] = static_cast<float>(col);
+    env_counts["nelastin"]  = static_cast<float>(eln);
+    env_counts["HA"]        = static_cast<float>(ha);
+    env_counts["fHA"]       = static_cast<float>(fha);
   }
+
 
   void BMWorld::write_data_row(std::ofstream & file,
     std::map<std::string, int> & agent_counts,
