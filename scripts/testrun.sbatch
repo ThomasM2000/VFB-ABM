@@ -60,6 +60,7 @@ echo "  OUTPUT_DIR=${OUTPUT_DIR}"
 echo "  SIMULATION_CONFIG=${SIMULATION_CONFIG}"
 echo "  OUTPUTFILE=${OUTPUTFILE}"
 echo "  NUMTICKS=${NUMTICKS}  OMP_NUM_THREADS=${OMP_NUM_THREADS}  PROFILE=${IVDBM_PROFILE:-cpu}"
+echo "  SEED_FLAG=${SEED_FLAG[*]:-<default 25234>}"
 
 set +e
 "${TESTRUN}" \
@@ -70,7 +71,8 @@ set +e
   --wxw "${WXW}" \
   --wyw "${WYW}" \
   --wzw "${WZW}" \
-  "${PARAVIEW_FLAG[@]}"
+  "${PARAVIEW_FLAG[@]}" \
+  "${SEED_FLAG[@]}"
 status=$?
 set -e
 
