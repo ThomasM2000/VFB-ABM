@@ -20,6 +20,9 @@ TESTS = {
     "migration": ("Mean Displacement",
         {B+"migration.baseline_speed": 0, B+"ha_synthesis.move_probability": 0},
         {B+"migration.baseline_speed": 5}, "lower", "higher"),
+    "migration2x": ("Mean Displacement",
+        {B+"migration.baseline_speed": 0, B+"ha_synthesis.move_probability": 0},
+        {B+"migration.baseline_speed": 1.73}, "lower", "higher"),
     "viability": ("Live Cells",
         {B+"viability.time_effect": 0, B+"viability.biomaterial_effect": 100},
         {B+"viability.time_effect": 0, B+"viability.biomaterial_effect": 10}, "higher", "lower"),
@@ -67,6 +70,10 @@ def run(job):
     if not os.path.exists(csv_path):
         os.makedirs(out, exist_ok=True)
         cfg = load_jsonc(a.config)
+        wi = cfg["world_init"]
+        if wi["fibroblast_count"] > 0:   # counts in gh*.json are for the 3 mm world
+            wi["fibroblast_count"] = max(1, round(wi["fibroblast_count"] * (float(a.world) / 3) ** 3))
+
         for k, v in overrides.items():
             set_key(cfg, k, v)
         cfg_path = os.path.join(out, "config.json")
