@@ -609,23 +609,19 @@ float Fibroblast::get_prolif_prob() {
  *   if TGF > k27  -> activate with probability k28
  *   if TGF > k29  -> activate
  *   otherwise     -> activate with probability k30
- * Probabilities are expressed in percent, as rollDice() expects.
+ *   * k28, k30, k31 are probabilities per tick in [0, 1].
  */
 bool Fibroblast::should_activate(float patchTGF) {
-	if (patchTGF > Fibroblast::activation_params[ACTIVATION_TGF_INTERMEDIATE_THRESHOLD]) // k27
-	return Agent::rollDice(
-		Fibroblast::activation_params[ACTIVATION_INTERMEDIATE_PROBABILITY]);           // k28
-
-	if (patchTGF > Fibroblast::activation_params[ACTIVATION_TGF_HIGH_THRESHOLD])         // k29
-	return true;
-
-	return Agent::rollDice(
-		Fibroblast::activation_params[ACTIVATION_INDEPENDENT_PROBABILITY]);              // k30
+	if (patchTGF > Fibroblast::activation_params[ACTIVATION_TGF_HIGH_THRESHOLD])          // k29
+		return true;
+	if (patchTGF > Fibroblast::activation_params[ACTIVATION_TGF_INTERMEDIATE_THRESHOLD])  // k27
+		return Agent::rollProb(Fibroblast::activation_params[ACTIVATION_INTERMEDIATE_PROBABILITY]); // k28
+	return Agent::rollProb(Fibroblast::activation_params[ACTIVATION_INDEPENDENT_PROBABILITY]);      // k30
 }
 
 /* Table 3, rule 10: deactivate with probability k31. */
 bool Fibroblast::should_deactivate() {
-	return Agent::rollDice(
+	return Agent::rollProb(
 		Fibroblast::activation_params[ACTIVATION_DEACTIVATION_PROBABILITY]);             // k31
 }
 
@@ -795,13 +791,13 @@ void Fibroblast::create_ha() {
   
 	for (int e = 0; e < n_events; e++) {
 		/* With probability HA + k57: move, then produce HA. */
-		if (Agent::rollDice(lHA + Fibroblast::haSynth[HA_MOVE_PROBABILITY])) {       // k57
+		if (Agent::rollDice(lHA + 100.f * Fibroblast::haSynth[HA_MOVE_PROBABILITY])) {       // k57
 		this->wiggle();
 		this->depositHA(ha, 1);
 		}
 	
 		/* With probability k58 + HA/k59: produce HA in the same patch. */
-		if (Agent::rollDice(Fibroblast::haSynth[HA_SAME_PATCH_PROBABILITY]           // k58
+		if (Agent::rollDice(100.f * Fibroblast::haSynth[HA_SAME_PATCH_PROBABILITY]           // k58
 							+ lHA / safe_denominator(Fibroblast::haSynth[HA_SAME_PATCH_EFFECT]))) { // k59
 		this->depositHA(ha, 1);
 		}

@@ -123,11 +123,11 @@
       },
       "activation": {
         "description": "if TGF > k27 activate with prob k28; else if TGF > k29 activate; else activate with prob k30. Deactivate with prob k31. Probabilities are in percent.",
-        "tgf_intermediate_threshold": 500, // k27
-        "intermediate_probability": 0.5, // k28
-        "tgf_high_threshold": 25, // k29
-        "independent_probability": 0.2, // k30
-        "deactivation_probability": 0.2 // k31
+        "tgf_intermediate_threshold": 25, // k27
+        "intermediate_probability": 0.005, // k28
+        "tgf_high_threshold": 500, // k29
+        "independent_probability": 0.002, // k30
+        "deactivation_probability": 0.002 // k31
       },
       "collagen_synthesis": {
         "description": "Col_b = k33 - k34 mesh - k35 E; Col = Col_b k36 (log10(1+TGF+IL6)+k37)/(1+FGF+k38 IL8); rate branches on HAf vs HAn via k39..k43",
@@ -162,8 +162,8 @@
         "elasticity_effect": 0.0003109, // k54 (Table 5)
         "activating_strength": 1, // k55
         "activating_offset": 0, // k56
-        "move_probability": 50, // k57
-        "same_patch_probability": 5, // k58
+        "move_probability": 0.5, // k57
+        "same_patch_probability": 0.05, // k58
         "same_patch_effect": 10 // k59
       }
     },

@@ -103,6 +103,12 @@ bool Agent::rollDice(float percent) {
 	return u * 100.0 < percent;
 }
 
+/* Probability given as a fraction in [0, 1]; rollDice() takes percent. */
+bool Agent::rollProb(float p) {
+	return rollDice(100.f * p);
+}
+
+
 
 float Agent::displacementFromSeed() const {
 	const float dx = static_cast<float>(this->ix[read_t] - this->ix0);

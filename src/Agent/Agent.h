@@ -108,6 +108,7 @@ public:
    * roll
    */
   static bool rollDice(float percent);
+  static bool rollProb(float p); 
 
   /*
    * Description:	Moves the cell to the target patch if it is valid and
