@@ -49,12 +49,14 @@ struct ProliferationParams {
   double activating_factor_effect = 0; // k12
   double baseline_offset = 0;          // k13
   double chemical_effect = 0;          // k14
+  double carrying_capacity_per_mL = 0; // K: growth cap on total cells (live + dead), cells/mL
 };
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(ProliferationParams, tgf_threshold,
                                    hours_between, time_effect, ha_time_effect,
                                    ha_effect, biomaterial_baseline, baseline,
                                    activating_factor_effect, baseline_offset,
-                                   chemical_effect)
+                                   chemical_effect, carrying_capacity_per_mL)
+
 
 /** TGF-beta synthesis: TGFinc = k15 + k16 (k17 + TNF + IL10) */
 struct TgfSynthesisParams {

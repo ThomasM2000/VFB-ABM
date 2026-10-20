@@ -117,6 +117,9 @@ void apply_biology_parameters(const BiologyParametersConfig &cfg) {
       static_cast<float>(fb.proliferation.baseline_offset);
   Fibroblast::proliferation[Fibroblast::PROLIFERATION_CHEMICAL_EFFECT] =
       static_cast<float>(fb.proliferation.chemical_effect);
+  Fibroblast::proliferation[Fibroblast::PROLIFERATION_CARRYING_CAPACITY] =
+      static_cast<float>(fb.proliferation.carrying_capacity_per_mL);
+
 
   // k15 .. k17
   Fibroblast::tgfSynthesis[Fibroblast::TGF_BASELINE] =

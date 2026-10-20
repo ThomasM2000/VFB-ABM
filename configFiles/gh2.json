@@ -92,8 +92,8 @@
         "baseline": 25, // k11
         "activating_factor_effect": 1, // k12
         "baseline_offset": 0, // k13
-        "chemical_effect": 3 // k14
-        // "carrying_capacity_per_mL": 5.0e5 // (K)
+        "chemical_effect": 3, // k14
+        "carrying_capacity_per_mL": 5.0e5 // (K)
       },
       "tgf_synthesis": {
         "description": "TGFinc = k15 + k16 (k17 + TNF + IL10)",

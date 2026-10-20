@@ -57,6 +57,11 @@ TESTS = {
          B+"activation.tgf_intermediate_threshold": 1e12, B+"activation.tgf_high_threshold": 1e12},
         {B+"activation.independent_probability": 0.05},
         "lower", "higher"),
+    "growth_cap": ("Total Cells",
+        {B+"proliferation.carrying_capacity_per_mL": 1},      # cap ~0: no divisions
+        {B+"proliferation.carrying_capacity_per_mL": 1e30},   # cap ~1: no limit
+        "lower", "higher"),
+
 }
 
 def load_jsonc(path):

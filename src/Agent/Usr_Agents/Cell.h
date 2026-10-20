@@ -158,7 +158,9 @@
      PROLIFERATION_ACTIVATING_FACTOR_EFFECT,// k12
      PROLIFERATION_BASELINE_OFFSET,         // k13
      PROLIFERATION_CHEMICAL_EFFECT,         // k14
+     PROLIFERATION_CARRYING_CAPACITY,       // K, cells/mL
      PROLIFERATION_COUNT
+
    };
    static_assert(sizeof(ProliferationParams) / sizeof(double) == PROLIFERATION_COUNT,
                  "ProliferationParams field count must match Fibroblast::ProliferationIdx");

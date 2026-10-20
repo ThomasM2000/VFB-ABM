@@ -448,7 +448,15 @@ int Cell::get_max_doublings() { return 100; }   // ihVFF, passage 6-10
 	if (prolif <= 0.0) return;
 
 	const double tick_h = Agent::agentWorldPtr->tick_interval_minutes() / 60.0;
-	const double p_tick = prolif * (tick_h / k6_h);          // % per tick
+	double p_tick = prolif * (tick_h / k6_h);          // % per tick
+	/* Growth cap: p_tick x (1 - N/K). N = live + cumulative dead cells, the
+	 * quantity PicoGreen measures and K is read from; K <= 0 disables the cap. */
+	const double K = Fibroblast::proliferation[Fibroblast::PROLIFERATION_CARRYING_CAPACITY] * BMWorld::totalVolumeML;
+	if (K > 0.0) {
+		const double N = BMWorld::liveCells + BMWorld::deadCells;
+		p_tick *= std::max(0.0, 1.0 - N / K);
+	}
+
 
 	if (Agent::rollDice(static_cast<float>(p_tick)) && this->hatchnewcell(1, this->type[read_t]) > 0)
 		this->doublings[write_t] = this->doublings[read_t] + 1;
