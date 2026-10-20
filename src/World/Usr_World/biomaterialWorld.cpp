@@ -471,9 +471,10 @@ void BMWorld::initializeChemBaseline() {
 void BMWorld::initializeCells() {
   cells = ArrayChain<Cell *>(DEFAULT_DATA_SMALL, 4, NULL, NULL);
 
-  /* Manuscript Table 1: 50 000 fibroblast agents. A count of 0 falls back to
-   * the in vitro seeding density of 1e6 cells/mL (Section 2.2.3). */
-  int seedCount = this->initialCells[0];
+  /* Live agents at t = 0 = day-0 total density x day-0 viability x construct
+   * volume. Day-0 dead cells are a counter only (deadCells, set in userInput). */
+  int seedCount = static_cast<int>(std::lround(
+    this->day0TotalCellsPerML * this->initialViability * BMWorld::totalVolumeML));
   if (seedCount <= 0)
     seedCount = static_cast<int>(1.0e6 * BMWorld::totalVolumeML);
 
@@ -1436,7 +1437,8 @@ void BMWorld::sproutAgentInWorld(int num, int patchType,
     const WorldInitParams cfg = load_world_init_config(config_path);
 
     this->initialViability = cfg.initial_viability;
-    this->initialCells.assign(1, cfg.fibroblast_count);
+    this->day0TotalCellsPerML = cfg.day0_total_cells_per_mL;
+    this->initialCells.assign(1, 0);   // set in initializeCells() from density x volume
     this->initialCollagenPerPatch = cfg.initial_ecm.collagen_per_patch;
     this->initialElastinPerPatch  = cfg.initial_ecm.elastin_per_patch;
     this->initialHAPerPatch       = cfg.initial_ecm.ha_per_patch;
@@ -1465,7 +1467,7 @@ void BMWorld::sproutAgentInWorld(int num, int patchType,
 
     cout << "-------------------------------------------" << endl;
     cout << "Biomaterial composition (Manuscript Table 2 world variables)" << endl;
-    cout << "  Initial fibroblasts             = " << this->initialCells[0] << endl;
+    cout << "  Day-0 total density   (cells/mL) = " << this->day0TotalCellsPerML << endl;
     cout << "  HA : Gtn volumetric ratio       = " << r << " : 1" << endl;
     cout << "  HA concentration  HAwv  (% w/v) = " << BMWorld::HAwv << endl;
     cout << "  Gtn concentration       (% w/v) = " << gtn_wv << endl;

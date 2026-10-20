@@ -48,14 +48,15 @@ WorldInitParams load_world_init_config(const std::string &path)
 
   const json &section = root.at("world_init");
   reject_unknown_keys(
-      section, {"description", "fibroblast_count", "biomaterial", "initial_ecm", "initial_viability"},
+      section, {"description", "day0_total_cells_per_mL", "biomaterial", "initial_ecm", "initial_viability"},
       "world_init");
 
   WorldInitParams cfg;
-  cfg.fibroblast_count = section.at("fibroblast_count").get<int>();
-  if (cfg.fibroblast_count < 0)
+  cfg.day0_total_cells_per_mL = section.at("day0_total_cells_per_mL").get<double>();
+  if (cfg.day0_total_cells_per_mL <= 0.0)
     throw std::invalid_argument(
-        "world_init config: fibroblast_count must be >= 0");
+        "world_init config: day0_total_cells_per_mL must be > 0");
+
   
   if (section.contains("initial_viability")) {
     cfg.initial_viability = section.at("initial_viability").get<double>();

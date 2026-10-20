@@ -2,7 +2,7 @@
   "description": "Combined IVDBM simulation config (chemistry + biology). Copy to simulation_config.json and edit.",
   "world_init": {
     "description": "Manuscript Table 1 (initial configuration) and Section 2.2.3 (hydrogel recipe). Table 2 world variables HA_ww / HA_wv / TP_wv / XL_ww are DERIVED in BMWorld::userInput() - do not put them here.",
-    "fibroblast_count": 11120, // Table 1: 50 000 in the 3 mm world; 0 = seed at 1e6 cells/mL
+    "day0_total_cells_per_mL": 469184.598,  // day-0 PicoGreen mean cells per 0.3 mL gel / 0.3
     "initial_viability": 0.878,
     "biomaterial": {
       "description": "1% w/v CMHA-S + 1% w/v Gtn-DTPH mixed at ha_gtn_ratio : 1 by volume, crosslinked with PEGDA (Section 2.2.3).",

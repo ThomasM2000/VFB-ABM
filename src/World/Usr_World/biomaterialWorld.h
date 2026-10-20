@@ -477,6 +477,8 @@ public:
   ECM *worldECM;              // Pointer to array of ECM
   vector<int>
       initialCells; // Initial amount of each cell type (agent) in the world
+  double day0TotalCellsPerML = 1.0e6; // world_init.day0_total_cells_per_mL
+
   
   /** Day-0 ECM from world_init.initial_ecm (ug per patch, Manuscript Table 2). */
   double initialCollagenPerPatch = 0.0;

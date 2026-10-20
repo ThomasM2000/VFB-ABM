@@ -39,11 +39,12 @@ struct WorldInitInitialEcmParams {
 };
 
 struct WorldInitParams {
-  /**
-   * Fibroblast agents seeded at t = 0 (Manuscript Table 1: 50 000).
-   * 0 falls back to the in vitro density of 1e6 cells/mL (Section 2.2.3).
+    /**
+   * Day-0 cell density (live + dead), cells/mL: day-0 PicoGreen mean per
+   * 0.3 mL gel / 0.3. Live agents seeded = density x initial_viability x
+   * construct volume, so one config works for any world size.
    */
-  int fibroblast_count = 0;
+  double day0_total_cells_per_mL = 1.0e6;
   double initial_viability = 1.0;
   WorldInitBiomaterialParams biomaterial;
   WorldInitInitialEcmParams initial_ecm;
