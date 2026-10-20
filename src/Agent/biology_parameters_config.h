@@ -110,11 +110,12 @@ struct ActivationParams {
   double tgf_high_threshold = 0;         // k29
   double independent_probability = 0;    // k30
   double deactivation_probability = 0;   // k31
+  double synthesis_multiplier = 1;       // activated-state multiplier on all synthesis (1 in Study 1)
 };
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(ActivationParams, tgf_intermediate_threshold,
                                    intermediate_probability,
                                    tgf_high_threshold, independent_probability,
-                                   deactivation_probability)
+                                   deactivation_probability, synthesis_multiplier)
 
 /**
  * Collagen synthesis (every k32 hours):

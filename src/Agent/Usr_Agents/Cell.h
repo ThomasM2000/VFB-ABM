@@ -220,6 +220,7 @@
      ACTIVATION_TGF_HIGH_THRESHOLD,             // k29
      ACTIVATION_INDEPENDENT_PROBABILITY,        // k30
      ACTIVATION_DEACTIVATION_PROBABILITY,       // k31
+     ACTIVATION_SYNTHESIS_MULTIPLIER,           // activated-state synthesis multiplier
      ACTIVATION_COUNT
    };
    static_assert(sizeof(ActivationParams) / sizeof(double) == ACTIVATION_COUNT,
@@ -284,6 +285,7 @@
      float get_prolif_prob() override;
      bool should_activate(float patchTGF) override;
      bool should_deactivate() override;
+     float synthesis_multiplier() const;   // multiplier if activated, else 1
      void create_cytokines() override;
      void create_collagen() override;
      void create_elastin() override;

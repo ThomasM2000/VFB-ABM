@@ -329,11 +329,11 @@ void Cell::cellFunction() {
 	/* 4. Proliferation  (Table 3, rule 3) */
 	this->proliferate();
 
-	/* 5-6. Only activated fibroblasts secrete (Figure 1C) */
-	if (this->activate[write_t]) {
-		this->cytokine_synthesis();
-		this->ecm_synthesis();
-	}
+	/* 5-6. All fibroblasts secrete at the Table 3 rates; the activated state
+	 * scales the amounts by synthesis_multiplier (1 in Study 1). */
+	this->cytokine_synthesis();
+	this->ecm_synthesis();
+ 
 
 	if (this->life[read_t] >= 0)
 		this->life[write_t] = this->life[read_t] + 1;
@@ -620,6 +620,14 @@ bool Fibroblast::should_activate(float patchTGF) {
 	return Agent::rollProb(Fibroblast::activation_params[ACTIVATION_INDEPENDENT_PROBABILITY]);      // k30
 }
 
+/* Activated fibroblasts scale every synthesis amount by this factor. */
+float Fibroblast::synthesis_multiplier() const {
+	return this->activate[write_t]
+		? Fibroblast::activation_params[ACTIVATION_SYNTHESIS_MULTIPLIER]
+		: 1.f;
+}
+
+
 /* Table 3, rule 10: deactivate with probability k31. */
 bool Fibroblast::should_deactivate() {
 	return Agent::rollProb(
@@ -666,11 +674,13 @@ void Fibroblast::create_cytokines() {
 		Fibroblast::il8Synthesis[IL8_BASELINE]
 		/ safe_denominator(Fibroblast::il8Synthesis[IL8_INHIBITORY_EFFECT] + lIL10 + lHA);
   
-	this->addPatchChemSecretion(TGF, in, tgfinc);
-	this->addPatchChemSecretion(FGF, in, fgfinc);
-	this->addPatchChemSecretion(TNF, in, tnfinc);
-	this->addPatchChemSecretion(IL6, in, il6inc);
-	this->addPatchChemSecretion(IL8, in, il8inc);
+	const float m = this->synthesis_multiplier();
+	this->addPatchChemSecretion(TGF, in, m * tgfinc);
+	this->addPatchChemSecretion(FGF, in, m * fgfinc);
+	this->addPatchChemSecretion(TNF, in, m * tnfinc);
+	this->addPatchChemSecretion(IL6, in, m * il6inc);
+	this->addPatchChemSecretion(IL8, in, m * il8inc);
+
 	/* IL-10 has no synthesis rule in Table 3; it enters only as a baseline. */
 }
 
@@ -720,7 +730,8 @@ void Fibroblast::create_collagen() {
 			 + col / safe_denominator(Fibroblast::collagenSynth[COLLAGEN_CHEMICAL_EFFECT]); // k43
 	}
   
-	this->depositCollagen(rate * frac);
+	this->depositCollagen(this->synthesis_multiplier() * rate * frac);
+
 }
 
 /*
@@ -751,7 +762,8 @@ void Fibroblast::create_elastin() {
 										* (1.f + lFGF + lTNF))
 				 + Fibroblast::elastinSynth[ELASTIN_BASELINE_RATE]);                  // k50
   
-	this->depositElastin(eln * frac);
+	this->depositElastin(this->synthesis_multiplier() * eln * frac);
+
 }
 
 /*
@@ -784,9 +796,11 @@ void Fibroblast::create_ha() {
 					   - Fibroblast::haSynth[HA_MESH_EFFECT] * BMWorld::meshSize // k53
 					   + Fibroblast::haSynth[HA_ELASTICITY_EFFECT] * BMWorld::E; // k54
   
-	const float ha = ha_b * (Fibroblast::haSynth[HA_ACTIVATING_STRENGTH]         // k55
-								 * log10(safe_log10_arg(1.f + lTGF + lTNF + lFGF))
-							 + Fibroblast::haSynth[HA_ACTIVATING_OFFSET]);       // k56
+	const float ha = this->synthesis_multiplier()
+		* ha_b * (Fibroblast::haSynth[HA_ACTIVATING_STRENGTH]         // k55
+					* log10(safe_log10_arg(1.f + lTGF + lTNF + lFGF))
+				+ Fibroblast::haSynth[HA_ACTIVATING_OFFSET]);       // k56
+  
   
 	if (ha <= 0.f) return;
   

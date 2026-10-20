@@ -93,6 +93,7 @@
         "activating_factor_effect": 1, // k12
         "baseline_offset": 0, // k13
         "chemical_effect": 3 // k14
+        // "carrying_capacity_per_mL": 5.0e5 // (K)
       },
       "tgf_synthesis": {
         "description": "TGFinc = k15 + k16 (k17 + TNF + IL10)",
@@ -127,7 +128,8 @@
         "intermediate_probability": 0.005, // k28
         "tgf_high_threshold": 500, // k29
         "independent_probability": 0.002, // k30
-        "deactivation_probability": 0.002 // k31
+        "deactivation_probability": 0.002, // k31
+        "synthesis_multiplier": 1.0
       },
       "collagen_synthesis": {
         "description": "Col_b = k33 - k34 mesh - k35 E; Col = Col_b k36 (log10(1+TGF+IL6)+k37)/(1+FGF+k38 IL8); rate branches on HAf vs HAn via k39..k43",

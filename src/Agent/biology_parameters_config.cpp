@@ -163,6 +163,9 @@ void apply_biology_parameters(const BiologyParametersConfig &cfg) {
       static_cast<float>(fb.activation.independent_probability);
   Fibroblast::activation_params[Fibroblast::ACTIVATION_DEACTIVATION_PROBABILITY] =
       static_cast<float>(fb.activation.deactivation_probability);
+  Fibroblast::activation_params[Fibroblast::ACTIVATION_SYNTHESIS_MULTIPLIER] =
+      static_cast<float>(fb.activation.synthesis_multiplier);
+
 
   // k32 .. k43
   Fibroblast::collagenSynth[Fibroblast::COLLAGEN_HOURS_BETWEEN] =

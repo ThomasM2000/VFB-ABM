@@ -48,6 +48,15 @@ TESTS = {
         {B+"elastin_synthesis.baseline": 1834}, "lower", "higher"),
     "ha": ("HA (", {B+"ha_synthesis.baseline": 0},
         {B+"ha_synthesis.baseline": 166.8}, "lower", "higher"),
+    "act_multiplier": ("Collagen",
+        {B+"activation.synthesis_multiplier": 0},
+        {B+"activation.synthesis_multiplier": 10, B+"activation.independent_probability": 0.05},
+        "lower", "higher"),
+    "gate_removed": ("Collagen",
+        {B+"activation.independent_probability": 0,
+         B+"activation.tgf_intermediate_threshold": 1e12, B+"activation.tgf_high_threshold": 1e12},
+        {B+"activation.independent_probability": 0.05},
+        "lower", "higher"),
 }
 
 def load_jsonc(path):
