@@ -605,12 +605,13 @@ float Fibroblast::get_prolif_prob() {
 }
 
 /*
- * Table 3, rule 9: activation.
- *   if TGF > k27  -> activate with probability k28
+ * Table 3, rule 9: activation (k27 = intermediate, k29 = high threshold).
  *   if TGF > k29  -> activate
+ *   if TGF > k27  -> activate with probability k28
  *   otherwise     -> activate with probability k30
- *   * k28, k30, k31 are probabilities per tick in [0, 1].
+ * k28, k30, k31 are probabilities per tick in [0, 1].
  */
+
 bool Fibroblast::should_activate(float patchTGF) {
 	if (patchTGF > Fibroblast::activation_params[ACTIVATION_TGF_HIGH_THRESHOLD])          // k29
 		return true;

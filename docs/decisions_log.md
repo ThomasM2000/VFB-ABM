@@ -21,3 +21,6 @@
 | 2026-10-14 | Each gel seeded from its own day-0 PicoGreen mean; Table 1's 50,000 not used | Handover; GH5 starts at 57% of GH2 |
 | PENDING | k27 = 25 (intermediate), k29 = 500 (high) | Names were inverted in v13 |
 | PENDING | Bounds convention for unstated ranges: ×0.25/×2.25 or ×0.1/×10 | To settle at meeting |
+| 2026-10-19 | Migration verification judged at tick 24 with On = 2× v (k2 = 1.73) | Mean displacement saturates at world scale in the 0.6 mm world before day 1; 10× run saturated |
+| 2026-10-20 | k27 = 25 (intermediate), k29 = 500 (high); should_activate checks k29 before k27 | Names were inverted in v13; with the old check order the high threshold could never be reached |
+| 2026-10-20 | k28/k30/k31 stored as per-tick probabilities in [0, 1] (0.005/0.002/0.002); k57/k58 as fractions (0.5/0.05), bounds divided by 100 | Nicole: probabilities as fractions. Values chosen to keep behaviour identical; HA term in the k57/k58 rules keeps its original percent scale (units not defined in v13) |
