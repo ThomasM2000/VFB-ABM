@@ -14,8 +14,7 @@ B = "biology.fibroblast."
 # name: (column prefix, off overrides, on overrides, expected off, expected on)
 TESTS = {
     "proliferation": ("Total Cells",
-        {B+"proliferation.baseline": 0, B+"proliferation.activating_factor_effect": 0,
-         B+"proliferation.baseline_offset": 0},
+        {B+"proliferation.baseline": 0, B+"proliferation.activating_factor_effect": 0, B+"proliferation.baseline_offset": 0},
         {B+"proliferation.baseline": 250}, "lower", "higher"),
     "migration": ("Mean Displacement",
         {B+"migration.baseline_speed": 0, B+"ha_synthesis.move_probability": 0},
