@@ -12,6 +12,13 @@ DAYS = {3: 144, 6: 288, 9: 432}
 B = "biology.fibroblast."
 M = "biology.biomaterial."
 
+# Cytokine base diffusivities in gh*.json (TNF, TGF, FGF, IL6, IL8, IL10), mm^2/min.
+# The code multiplies these by Q(t); this test scales all six together (Nicole, Nov 11).
+D_BASE = [0.00018, 0.000156, 0.000177, 0.000168, 0.000228, 0.000139]
+def d_scale(f):
+    return {f"chemistry.species.{i}.base_diffusivity_mm2_per_min": f * d
+            for i, d in enumerate(D_BASE)}
+
 
 # name: (column prefix, off overrides, on overrides, expected off, expected on)
 TESTS = {
@@ -88,7 +95,9 @@ TESTS = {
         {M+"mass_loss.baseline": 53},                                # c16 x10
         "lower", "higher"),
 
-
+    # D test: off = D x 0.1, base = D x 1, on = D x 3. No expected direction;
+    # read Total Cells and Collagen with compare_to_data.py, ignore the verdict.
+    "diffusion": ("Total Cells", d_scale(0.1), d_scale(3), "lower", "higher"),
 
 }
 
@@ -100,10 +109,14 @@ def set_key(cfg, dotted, value):
     node = cfg
     *parents, leaf = dotted.split(".")
     for p in parents:
-        node = node[p]
+        node = node[int(p)] if isinstance(node, list) else node[p]
+    if isinstance(node, list):
+        node[int(leaf)] = value
+        return
     if leaf not in node:
         sys.exit(f"unknown config key: {dotted}")
     node[leaf] = value
+
 
 def run(job):
     a, name, case, overrides, seed = job

@@ -185,8 +185,8 @@ BMWorld::BMWorld(double length, double width, double height, double plength) {
 #endif
   /* Chemistry controller. */
   {
-    const double swelling_Q =
-        (this->Q > 0.0f) ? static_cast<double>(this->Q) : 1.0;
+    const double swelling_Q = 1.0;
+        // (this->Q > 0.0f) ? static_cast<double>(this->Q) : 1.0;
     const double stiffness_Gp =
         (this->Gp > 0.0f) ? static_cast<double>(this->Gp) : 1.0;
     chemical_environment_.reset(
@@ -1237,9 +1237,9 @@ void BMWorld::sproutAgentInWorld(int num, int patchType,
                  + BMWorld::SwellRatio[SWELL_HA_EFFECT] * BMWorld::HAww       // c11
                  + BMWorld::SwellRatio[SWELL_BASELINE];                       // c12
 
-    /* Swelling reduces effective diffusivity: D_eff = base_D * Q. */
-    if (BMWorld::Q > 0.0f && chemical_environment_)
-      chemical_environment_->set_swelling_ratio(static_cast<double>(BMWorld::Q));
+    // /* Swelling reduces effective diffusivity: D_eff = base_D * Q. */
+    // if (BMWorld::Q > 0.0f && chemical_environment_)
+    //   chemical_environment_->set_swelling_ratio(static_cast<double>(BMWorld::Q));
     if (BMWorld::Gp > 0.0f && chemical_environment_)
       chemical_environment_->set_stiffness(static_cast<double>(BMWorld::Gp));
   }
