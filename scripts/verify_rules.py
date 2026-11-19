@@ -10,6 +10,8 @@ from concurrent.futures import ProcessPoolExecutor
 
 DAYS = {3: 144, 6: 288, 9: 432}
 B = "biology.fibroblast."
+M = "biology.biomaterial."
+
 
 # name: (column prefix, off overrides, on overrides, expected off, expected on)
 TESTS = {
@@ -42,7 +44,7 @@ TESTS = {
     "collagen": ("Collagen",
         {B+"collagen_synthesis.baseline": 0, B+"collagen_synthesis.equal_frag_offset": 0,
          B+"collagen_synthesis.baseline_rate": 0},
-        {B+"collagen_synthesis.baseline": 89220, B+"collagen_synthesis.baseline_rate": 100}, "lower", "higher"),
+        {B+"collagen_synthesis.baseline": 8922, B+"collagen_synthesis.baseline_rate": 100}, "lower", "higher"),
     "elastin": ("Elastin", {B+"elastin_synthesis.baseline": 0},
         {B+"elastin_synthesis.baseline": 1834}, "lower", "higher"),
     "ha": ("HA (", {B+"ha_synthesis.baseline": 0},
@@ -60,6 +62,33 @@ TESTS = {
         {B+"proliferation.carrying_capacity_per_mL": 1},      # cap ~0: no divisions
         {B+"proliferation.carrying_capacity_per_mL": 1e30},   # cap ~1: no limit
         "lower", "higher"),
+    "collagen_xb10": ("Collagen",
+        {B+"collagen_synthesis.baseline": 0, B+"collagen_synthesis.equal_frag_offset": 0,
+         B+"collagen_synthesis.baseline_rate": 0},
+        {B+"collagen_synthesis.baseline": 8922, B+"collagen_synthesis.mesh_effect": 255.4,
+         B+"collagen_synthesis.elasticity_effect": 0.02429}, "lower", "higher"),
+    "elastin_xb10": ("Elastin", {B+"elastin_synthesis.baseline": 0},
+        {B+"elastin_synthesis.baseline": 1834, B+"elastin_synthesis.mesh_effect": 47.02,
+         B+"elastin_synthesis.elasticity_effect": 0.009759}, "lower", "higher"),
+        # Table 4 (biomaterial) rules: deterministic, so SD = 0 across seeds.
+    "g_prime": ("Shear Storage Modulus",
+        {M+"elastic_modulus.ha_crosslinker_interaction": 0},         # c4 = 0
+        {M+"elastic_modulus.ha_crosslinker_interaction": 2666.4},    # c4 x2
+        "lower", "higher"),
+    "mesh": ("Mesh Size",
+        {M+"elastic_modulus.ha_crosslinker_interaction": 2666.4},    # stiffer -> smaller xi
+        {M+"elastic_modulus.ha_crosslinker_interaction": 0},         # softer  -> larger xi
+        "lower", "higher"),
+    "rho_xl": ("Crosslink Density",
+        {M+"elastic_modulus.ha_crosslinker_interaction": 0},
+        {M+"elastic_modulus.ha_crosslinker_interaction": 2666.4},
+        "lower", "higher"),
+    "wl": ("Dry-weight Loss",
+        {M+"mass_loss.ha_time_effect": 0, M+"mass_loss.ha_effect": 0, M+"mass_loss.baseline": 0},
+        {M+"mass_loss.baseline": 53},                                # c16 x10
+        "lower", "higher"),
+
+
 
 }
 
