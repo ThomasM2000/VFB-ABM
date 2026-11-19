@@ -23,8 +23,14 @@ struct WorldInitBiomaterialParams {
   double gtn_wv_percent = 1.0;
   /** PEGDA crosslinker final concentration, % w/v. */
   double pegda_wv_percent = 0.25;
-  /** Thiol : double bond molar ratio (Table 2 TDB_MR); not in the manuscript. */
-  double thiol_double_bond_molar_ratio = 0.1;
+  /** PEGDA stock concentration before mixing, % w/v (Shung 2017 §2.2.8 p.43). */
+  double pegda_stock_wv_percent = 1.67;
+  /** Free thiol content of CMHA-S, mmol/g (Vanderhooft 2009, measured). */
+  double ha_thiol_mmol_per_g = 0.89;
+  /** Free thiol content of Gtn-DTPH, mmol/g (Vanderhooft 2009, measured). */
+  double gtn_thiol_mmol_per_g = 0.57;
+  /** PEGDA molecular weight, g/mol (two acrylate C=C per molecule). */
+  double pegda_mw_g_per_mol = 3400.0;
 };
 
 /**

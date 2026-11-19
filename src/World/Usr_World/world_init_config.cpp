@@ -68,20 +68,39 @@ WorldInitParams load_world_init_config(const std::string &path)
 
   const json &bm = section.at("biomaterial");
   reject_unknown_keys(bm,
-                      {"description", "ha_gtn_ratio", "ha_wv_percent",
-                        "gtn_wv_percent", "pegda_wv_percent",
-                        "thiol_double_bond_molar_ratio"},
-                      "world_init.biomaterial");
+    {"description", "ha_gtn_ratio", "ha_wv_percent",
+      "gtn_wv_percent", "pegda_wv_percent",
+      "pegda_stock_wv_percent",
+      "ha_thiol_mmol_per_g",
+      "gtn_thiol_mmol_per_g",
+      "pegda_mw_g_per_mol"},
+    "world_init.biomaterial");
   cfg.biomaterial.ha_gtn_ratio     = bm.at("ha_gtn_ratio").get<double>();
   cfg.biomaterial.ha_wv_percent    = bm.at("ha_wv_percent").get<double>();
   cfg.biomaterial.gtn_wv_percent   = bm.at("gtn_wv_percent").get<double>();
   cfg.biomaterial.pegda_wv_percent = bm.at("pegda_wv_percent").get<double>();
-  cfg.biomaterial.thiol_double_bond_molar_ratio =
-      bm.at("thiol_double_bond_molar_ratio").get<double>();
+  cfg.biomaterial.pegda_stock_wv_percent = bm.at("pegda_stock_wv_percent").get<double>();
+  cfg.biomaterial.ha_thiol_mmol_per_g = bm.at("ha_thiol_mmol_per_g").get<double>();
+  cfg.biomaterial.gtn_thiol_mmol_per_g = bm.at("gtn_thiol_mmol_per_g").get<double>();
+  cfg.biomaterial.pegda_mw_g_per_mol = bm.at("pegda_mw_g_per_mol").get<double>();
+
+  if (cfg.biomaterial.ha_thiol_mmol_per_g <= 0.0)
+    throw std::invalid_argument(
+        "world_init config: biomaterial.ha_thiol_mmol_per_g must be > 0");
+  if (cfg.biomaterial.gtn_thiol_mmol_per_g <= 0.0)
+    throw std::invalid_argument(
+        "world_init config: biomaterial.gtn_thiol_mmol_per_g must be > 0");
+  if (cfg.biomaterial.pegda_mw_g_per_mol <= 0.0)
+    throw std::invalid_argument(
+        "world_init config: biomaterial.pegda_mw_g_per_mol must be > 0");
 
   if (cfg.biomaterial.ha_gtn_ratio <= 0.0)
     throw std::invalid_argument(
         "world_init config: biomaterial.ha_gtn_ratio must be > 0");
+
+  if (cfg.biomaterial.pegda_stock_wv_percent <= cfg.biomaterial.pegda_wv_percent)
+    throw std::invalid_argument(
+        "world_init config: biomaterial.pegda_stock_wv_percent must be > biomaterial.pegda_wv_percent");
 
   /* initial_ecm is optional; struct defaults apply when absent. */
   if (section.contains("initial_ecm")) {

@@ -543,12 +543,12 @@ int Cell::hatchnewcell(int number, int agentType, int here) {
 /* -------------------------------------------------------------------------- */
 
 
-// Table 3, rule 1:  v = -k1 ln(E) + k2   [um/min] -> patches/tick.
+// Table 3, rule 1:  v = -k1 ln(G') + k2   [um/min] -> patches/tick.
 float Fibroblast::get_migration_speed() {
-	float E = BMWorld::E;                       // elastic modulus in Pa
-	if (E <= 1.f) E = 1.f;                      // ln(E) domain guard
+	float Gp = BMWorld::Gp;                       // shear storage modulus G', Pa
+	if (Gp <= 1.f) Gp = 1.f;                      // ln(Gp) domain guard
 
-	float v_um_per_min = -Fibroblast::migration[MIGRATION_ELASTICITY_EFFECT] * log(E)
+	float v_um_per_min = -Fibroblast::migration[MIGRATION_ELASTICITY_EFFECT] * log(Gp)
                        + Fibroblast::migration[MIGRATION_BASELINE_SPEED];
 	if (v_um_per_min < 0.f) v_um_per_min = 0.f;
 
@@ -715,7 +715,7 @@ void Fibroblast::create_collagen() {
   
 	const float col_b = Fibroblast::collagenSynth[COLLAGEN_BASELINE]                 // k33
 						- Fibroblast::collagenSynth[COLLAGEN_MESH_EFFECT] * BMWorld::meshSize  // k34
-						- Fibroblast::collagenSynth[COLLAGEN_ELASTICITY_EFFECT] * BMWorld::E;  // k35
+						- Fibroblast::collagenSynth[COLLAGEN_ELASTICITY_EFFECT] * BMWorld::E_Pa;  // k35
   
 	const float col =
 		col_b * Fibroblast::collagenSynth[COLLAGEN_ACTIVATING_STRENGTH]              // k36
@@ -760,7 +760,7 @@ void Fibroblast::create_elastin() {
   
 	const float eln_b = Fibroblast::elastinSynth[ELASTIN_BASELINE]                    // k44
 						- Fibroblast::elastinSynth[ELASTIN_MESH_EFFECT] * BMWorld::meshSize // k45
-						- Fibroblast::elastinSynth[ELASTIN_ELASTICITY_EFFECT] * BMWorld::E; // k46
+						- Fibroblast::elastinSynth[ELASTIN_ELASTICITY_EFFECT] * BMWorld::E_Pa; // k46
   
 	const float eln =
 		eln_b * ((Fibroblast::elastinSynth[ELASTIN_ACTIVATING_STRENGTH]               // k47
@@ -802,7 +802,7 @@ void Fibroblast::create_ha() {
   
 	const float ha_b = Fibroblast::haSynth[HA_BASELINE]                          // k52
 					   - Fibroblast::haSynth[HA_MESH_EFFECT] * BMWorld::meshSize // k53
-					   + Fibroblast::haSynth[HA_ELASTICITY_EFFECT] * BMWorld::E; // k54
+					   + Fibroblast::haSynth[HA_ELASTICITY_EFFECT] * BMWorld::E_Pa; // k54
   
 	const float ha = this->synthesis_multiplier()
 		* ha_b * (Fibroblast::haSynth[HA_ACTIVATING_STRENGTH]         // k55

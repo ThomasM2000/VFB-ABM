@@ -74,7 +74,7 @@ namespace util {
     output_file << tnf << "\t" << tgf << "\t" << fgf << "\t"
                 << il6 << "\t" << il8 << "\t" << il10 << "\t";
     /* Mechanical properties - Section 2.1. */
-    output_file << BMWorld::E << "\t" << BMWorld::Q << "\t"
+    output_file << BMWorld::Gp << "\t" << BMWorld::E_Pa << "\t" << BMWorld::Q << "\t"
                 << BMWorld::massLoss << "\t";
     output_file << endl;
   #endif  // ifdef CALIBRATION

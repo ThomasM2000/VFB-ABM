@@ -33,6 +33,7 @@
 #include <omp.h>
 #include <sstream>
 #include <string>
+#include <cmath>
 
 using namespace std;
 
@@ -49,17 +50,17 @@ float BMWorld::deletedCells = 0;
 float BMWorld::prevCells = 0;
 
 #ifdef MODEL_SCAFFOLD
-int   BMWorld::initialPatches = 0;
 float BMWorld::totalVolumeML = 0;
 
 /* World variables, Manuscript Table 2 */
-float BMWorld::E         = 0;   // Pa
+float BMWorld::Gp         = 0;   // Pa
+float BMWorld::E_Pa     = 0;   // Pa
 float BMWorld::poreWidth = 0;   // um
-float BMWorld::meshSize  = 0;   // um^-1
+float BMWorld::meshSize  = 0;   // nm
+float BMWorld::xiNm      = 0;   // nm
 float BMWorld::Q         = 0;   // % w/w
 float BMWorld::massLoss  = 0;   // %
-float BMWorld::massLoss0 = 0;   // %
-float BMWorld::pXL       = 0;   // mmol/mL
+float BMWorld::pXL       = 0;   // µmol/mL
 
 float BMWorld::HAww  = 0;
 float BMWorld::HAwv  = 0;
@@ -69,7 +70,7 @@ float BMWorld::TDBMR = 0;
 
 /* Biomaterial-rule parameters, Manuscript Table 4 (c1..c19), filled from JSON */
 float BMWorld::ElasticMod[BMWorld::ELASTIC_MOD_COUNT] = {};
-float BMWorld::XLDensity [BMWorld::XLDENSITY_COUNT]   = {};
+// float BMWorld::XLDensity [BMWorld::XLDENSITY_COUNT]   = {};
 float BMWorld::SwellRatio[BMWorld::SWELL_RATIO_COUNT] = {};
 float BMWorld::MassLoss  [BMWorld::MASS_LOSS_COUNT]   = {};
 float BMWorld::PoreSize  [BMWorld::PORE_SIZE_COUNT]   = {};
@@ -186,12 +187,12 @@ BMWorld::BMWorld(double length, double width, double height, double plength) {
   {
     const double swelling_Q =
         (this->Q > 0.0f) ? static_cast<double>(this->Q) : 1.0;
-    const double stiffness_E =
-        (this->E > 0.0f) ? static_cast<double>(this->E) : 1.0;
+    const double stiffness_Gp =
+        (this->Gp > 0.0f) ? static_cast<double>(this->Gp) : 1.0;
     chemical_environment_.reset(
         new ChemicalEnvironment(nx, ny, nz, this->patchlength));
     chemical_environment_->load_from_config(
-        util::getSimulationConfigPath(), swelling_Q, stiffness_E);
+        util::getSimulationConfigPath(), swelling_Q, stiffness_Gp);
     chemical_environment_->allocate_channels_from_config();
     this->sync_baseline_chem_from_config();
     this->initializeChemBaseline();
@@ -287,10 +288,6 @@ void BMWorld::initializePatches() {
   // o2Line.resize(nx / 2 + 1, 0.0f);
   lineY = ny / 2;
   lineZ = nz / 2;
-
-  // Assign values to initial:
-  BMWorld::initialPatches = this->countPatchType(biomaterial);
-  // cout << "Finished building Ca-Alg Hydrogel" << endl;
 }
 
 #ifdef MODEL_SCAFFOLD
@@ -300,13 +297,13 @@ void BMWorld::initializePatches() {
  void BMWorld::initializeBiomaterial() {
   cout << "Computing biomaterial properties (Manuscript Table 4)..." << endl;
 
-  /* rho_XL = c7 - c8 TDB_MR   [mmol/mL] */
-  BMWorld::pXL = BMWorld::XLDensity[XLDENSITY_BASELINE]                      // c7
-                 - BMWorld::XLDensity[XLDENSITY_THIOL_DOUBLE_BOND_EFFECT]    // c8
-                       * BMWorld::TDBMR;
+  // /* rho_XL = c7 - c8 TDB_MR   [mmol/mL] */
+  // BMWorld::pXL = BMWorld::XLDensity[XLDENSITY_BASELINE]                      // c7
+  //                - BMWorld::XLDensity[XLDENSITY_THIOL_DOUBLE_BOND_EFFECT]    // c8
+  //                      * BMWorld::TDBMR;
 
-  /* E = c1 TPwv HAww + c2 HAww + c3 TPwv + c4 HAwv XLww + c5 XLww + c6  [Pa] */
-  BMWorld::E = BMWorld::ElasticMod[ELASTIC_POLYMER_HA_INTERACTION]           // c1
+  /* G' = c1 TPwv HAww + c2 HAww + c3 TPwv + c4 HAwv XLww + c5 XLww + c6  [Pa] */
+  BMWorld::Gp = BMWorld::ElasticMod[ELASTIC_POLYMER_HA_INTERACTION]           // c1
                    * BMWorld::TPwv * BMWorld::HAww
                + BMWorld::ElasticMod[ELASTIC_HA_CONCENTRATION]               // c2
                      * BMWorld::HAww
@@ -318,26 +315,43 @@ void BMWorld::initializePatches() {
                      * BMWorld::XLww
                + BMWorld::ElasticMod[ELASTIC_BASELINE];                      // c6
 
+  BMWorld::E_Pa = 3.f * BMWorld::Gp; // convert to Pa
+
+  /* rho_XL = G' / (R T): elastically effective crosslink density from rubber
+   * elasticity (Nicole, Oct 26). G' in Pa = J/m^3, so mol/m^3 = umol/mL.
+   * T = 298 K, the room temperature of Vanderhooft's rheology behind G'. */
+  constexpr float R_J_PER_MOL_K = 8.314f;
+  constexpr float T_RHEOLOGY_K  = 298.f;
+  BMWorld::pXL = BMWorld::Gp / (R_J_PER_MOL_K * T_RHEOLOGY_K); 
+
+  /* Network mesh size from rubber elasticity, xi = (k_B T / G')^(1/3), in nm
+   * (Burla 2020 Eqs. 6-7; Zerdoum 2018; Nicole, Nov 11). Same T as rho_XL. */
+  constexpr double KB_J_PER_K = 1.380649e-23;
+  BMWorld::xiNm = static_cast<float>(
+      std::cbrt(KB_J_PER_K * T_RHEOLOGY_K / BMWorld::Gp) * 1e9);
+ 
+
   /* p = -c17 HAww^2 + c18 HAww + c19   [um] */
   BMWorld::poreWidth =
       -BMWorld::PoreSize[PORE_HA_QUADRATIC_EFFECT] * BMWorld::HAww * BMWorld::HAww // c17
       + BMWorld::PoreSize[PORE_HA_LINEAR_EFFECT] * BMWorld::HAww                   // c18
       + BMWorld::PoreSize[PORE_BASELINE];                                          // c19
 
-  /* mesh = 15000 / p   [um^-1]   (Manuscript Table 2) */
-  BMWorld::meshSize =
-      (BMWorld::poreWidth > 0.f) ? 15000.f / BMWorld::poreWidth : 0.f;
+  /* mesh = xi in nm. k34/k45/k53 were fitted on Liao 2008 Fig. 2A mesh in nm
+   * (two-variable fit with E in Pa, see Liao2008_ECM_coefficients.xlsx). */
+   BMWorld::meshSize = BMWorld::xiNm;
+
 
   /* Q and w_l at t = 0. */
   this->updateSwellingRatio();
   this->updateMassLoss();
 
-  cout << "  Crosslink density rho_XL (mmol/mL) = " << BMWorld::pXL << endl;
-  cout << "  Elastic modulus   E      (Pa)      = " << BMWorld::E << endl;
+  cout << "  Crosslink density rho_XL (µmol/mL) = " << BMWorld::pXL << endl;
+  cout << "  Shear storage modulus G' (Pa)      = " << BMWorld::Gp << endl;
   cout << "  Pore size         p      (um)      = " << BMWorld::poreWidth << endl;
-  cout << "  Mesh size         mesh   (um^-1)   = " << BMWorld::meshSize << endl;
+  cout << "  Mesh size         mesh   (nm)   = " << BMWorld::meshSize << endl;
   cout << "  Swelling ratio    Q      (% w/w)   = " << BMWorld::Q << endl;
-  cout << "  Mass loss         w_l    (%)       = " << BMWorld::massLoss << endl;
+  cout << "  Dry-weight loss w_l (%)            = " << BMWorld::massLoss << endl;
 }
 #endif // MODEL_SCAFFOLD
 
@@ -1226,12 +1240,15 @@ void BMWorld::sproutAgentInWorld(int num, int patchType,
     /* Swelling reduces effective diffusivity: D_eff = base_D * Q. */
     if (BMWorld::Q > 0.0f && chemical_environment_)
       chemical_environment_->set_swelling_ratio(static_cast<double>(BMWorld::Q));
-    if (BMWorld::E > 0.0f && chemical_environment_)
-      chemical_environment_->set_stiffness(static_cast<double>(BMWorld::E));
+    if (BMWorld::Gp > 0.0f && chemical_environment_)
+      chemical_environment_->set_stiffness(static_cast<double>(BMWorld::Gp));
   }
 
-  /* Table 4: w_l = (c13 HAww - c14) t_w + c15 HAww + c16   [%] */
-  void BMWorld::updateMassLoss() {
+  /* Table 4: w_l = (c13 HAww - c14) t_w + c15 HAww + c16   [%, dry weight]
+   * Reported only. The gel keeps its volume over 9 days (Shu 2006: swells
+   * to ~120 % while losing polymer; Lawyer 2012: no loss without enzymes),
+   * so patches stay "biomaterial" and no cell rule reads w_l (Nicole, Nov 11). */
+   void BMWorld::updateMassLoss() {
     const float tweek = static_cast<float>(reportDay()) / 7.f;
 
     float w_t = (BMWorld::MassLoss[MASSLOSS_HA_TIME_EFFECT] * BMWorld::HAww    // c13
@@ -1239,30 +1256,10 @@ void BMWorld::sproutAgentInWorld(int num, int patchType,
                     * tweek
                 + BMWorld::MassLoss[MASSLOSS_HA_EFFECT] * BMWorld::HAww        // c15
                 + BMWorld::MassLoss[MASSLOSS_BASELINE];                        // c16
-
     if (w_t < 0.f) w_t = 0.f;
-        /* The fit has a non-zero intercept (w_l(0) = c15 HAww + c16 = 65.3 %). That
-     * is a property of the regression, not mass the construct has already lost.
-     * Without this guard the t = 0 call degrades 65 % of the patches before the
-     * first tick; every cell on a degraded patch then fails the
-     * `type != biomaterial` test in proliferate() and ecm_synthesis() for the
-     * rest of the run. */
-    if (BMWorld::clock == 0) {
-      BMWorld::massLoss = w_t;
-      BMWorld::massLoss0 = w_t;
-      return;
-    }
-
-    /* Degrade against the cumulative target so the per-tick float->int
-     * truncation does not accumulate. massLoss0 is w_l at t = 0 (see guard). */
-     const int target = static_cast<int>(std::lround(
-      0.01 * (w_t - BMWorld::massLoss0) * BMWorld::initialPatches));
-     const int already = BMWorld::initialPatches - this->countPatchType(biomaterial);
-     if (target > already)
-       this->degradebiomaterial(target - already);
-     BMWorld::massLoss = w_t;
-
+    BMWorld::massLoss = w_t;
   }
+
 // #ifdef PEPTIDE_BM
 //   void BMWorld::updateE() {
 //     BMWorld::E =
@@ -1273,75 +1270,6 @@ void BMWorld::sproutAgentInWorld(int num, int patchType,
 //       chemical_environment_->set_stiffness(static_cast<double>(BMWorld::E));
 //   }
 // #endif // PEPTIDE_BM
-#endif // MODEL_SCAFFOLD
-
-#ifdef MODEL_SCAFFOLD
-  void BMWorld::degradebiomaterial(int numOfPatches) {
-    int xmin = 0;
-    int xmax = nx;
-    int ymin = 0;
-    int ymax = ny;
-    int zmin = 0;
-    int zmax = nz;
-    int patchType = biomaterial;
-    vector<int> patchlist;
-    // int *reservoir = new int[numOfPatches];
-    // for (int i = 0; i < numOfPatches; i++)
-    //   reservoir[i] = -1;
-    int in, agentIndex, max;
-    int count = 0;
-
-    // Make list of possible biomaterial Patches to degrade
-    for (int iz = zmin; iz < zmax; iz++) {
-      for (int iy = ymin; iy < ymax; iy++) {
-        for (int ix = xmin; ix < xmax; ix++) {
-          in = ix + iy * nx + iz * nx * ny;
-
-          // Try another patch if this one is out of bounds or the wrong type or
-          // occupied
-          if (ix < 0 || ix >= nx || iy < 0 || iy >= ny || iz < 0 || iz >= nz)
-            continue;
-          if (BMWorld::worldPatch[in].type[read_t] != patchType)
-            continue;
-          patchlist.push_back(in);
-        }
-      }
-    }
-
-    // // Choose random patches from patch list
-    // for (int i = 0; i < numOfPatches; i++) {
-    //   if (patchlist.size() == 0) { // No available patches
-    //     // cout << " biomaterial degrade error, no available patch within bounds! " <<
-    //     // endl;
-    //     delete[] reservoir;
-    //     return;
-    //   }
-    //   int randnumber = rand() % patchlist.size();
-    //   reservoir[i] = patchlist[randnumber]; // Prepare 'num' random patches
-    // }
-
-    // // Degrade 'numOfPatches" number of biomaterial patches in reservoir list
-    // for (int i = 0; i < numOfPatches; i++) {
-    //   int in = reservoir[i];
-    //   if (in < 0 || in > (nx - 1) + (ny - 1) * nx + (nz - 1) * nx * ny)
-    //     continue;
-    //   BMWorld::worldPatch[in].type[write_t] = nothing;
-    //   BMWorld::worldPatch[in].color[write_t] = cnothing;
-    //   BMWorld::worldPatch[in].dirty = true;
-    //   count++;
-    // }
-    // delete[] reservoir;
-    if (numOfPatches <= 0 || patchlist.empty()) return;
-    std::random_shuffle(patchlist.begin(), patchlist.end());
-    const int n = std::min<int>(numOfPatches, static_cast<int>(patchlist.size()));
-    for (int i = 0; i < n; i++) {
-      const int in = patchlist[i];
-      BMWorld::worldPatch[in].type[write_t]  = nothing;
-      BMWorld::worldPatch[in].color[write_t] = cnothing;
-      BMWorld::worldPatch[in].dirty = true;
-    }
-
-  }
 #endif // MODEL_SCAFFOLD
 
   void BMWorld::debugInfo() {
@@ -1447,11 +1375,16 @@ void BMWorld::sproutAgentInWorld(int num, int patchType,
      * at a volumetric ratio r:1, then PEGDA is added to a final % w/v.
      * The Table 2 world variables follow from that recipe; keeping the
      * conversion here means the config never carries a derived quantity. */
-    const double r       = cfg.biomaterial.ha_gtn_ratio;
-    const double ha_wv   = cfg.biomaterial.ha_wv_percent  * (r / (r + 1.0));
-    const double gtn_wv  = cfg.biomaterial.gtn_wv_percent * (1.0 / (r + 1.0));
-    const double tp_wv   = ha_wv + gtn_wv;
-    const double pegda   = cfg.biomaterial.pegda_wv_percent;
+     const double pegda       = cfg.biomaterial.pegda_wv_percent;
+     const double pegda_stock = cfg.biomaterial.pegda_stock_wv_percent;
+     /* PEGDA stock is added to the HA-Gtn mix, so the polymers are diluted to
+      * f = 1 - final/stock of their mixed concentration (Shung 2017 §2.2.8 p.43). */
+     const double f      = 1.0 - pegda / pegda_stock;
+     const double r      = cfg.biomaterial.ha_gtn_ratio;
+     const double ha_wv  = f * cfg.biomaterial.ha_wv_percent  * (r / (r + 1.0));
+     const double gtn_wv = f * cfg.biomaterial.gtn_wv_percent * (1.0 / (r + 1.0));
+     const double tp_wv  = ha_wv + gtn_wv;
+     
 
     BMWorld::HAwv = static_cast<float>(ha_wv);
     BMWorld::TPwv = static_cast<float>(tp_wv);
@@ -1462,8 +1395,22 @@ void BMWorld::sproutAgentInWorld(int num, int patchType,
      * if that fit used PEGDA/polymer instead, drop `+ pegda` below. */
     BMWorld::XLww = static_cast<float>(
         (tp_wv + pegda > 0.0) ? pegda / (tp_wv + pegda) : 0.0);
-    BMWorld::TDBMR =
-        static_cast<float>(cfg.biomaterial.thiol_double_bond_molar_ratio);
+    /* TDB_MR: mol free thiol / mol acrylate C=C in the final gel. % w/v x 10
+     * = mg/mL; mg/mL x mmol/g = umol/mL; mg/mL x 1000 / MW = umol/mL PEGDA,
+     * 2 C=C each. ha_wv and gtn_wv already carry the dilution f. */
+    const double thiol_umol_per_mL =
+        10.0 * ha_wv  * cfg.biomaterial.ha_thiol_mmol_per_g
+      + 10.0 * gtn_wv * cfg.biomaterial.gtn_thiol_mmol_per_g;
+    const double ene_umol_per_mL =
+        2.0 * 10.0 * pegda * 1000.0 / cfg.biomaterial.pegda_mw_g_per_mol;
+    BMWorld::TDBMR = static_cast<float>(thiol_umol_per_mL / ene_umol_per_mL);
+
+    /* The G' rule holds only while thiols are in excess (Vanderhooft 2009:
+      * G' rises with PEGDA until thiols become limiting near 1:1). */
+    if (BMWorld::TDBMR < 1.f)
+      throw std::invalid_argument(
+          "userInput: TDB_MR < 1 (thiol-limited); the G' rule is not valid");
+
 
     cout << "-------------------------------------------" << endl;
     cout << "Biomaterial composition (Manuscript Table 2 world variables)" << endl;
@@ -1475,6 +1422,9 @@ void BMWorld::sproutAgentInWorld(int num, int patchType,
     cout << "  HA fraction       HAww  (w/w)   = " << BMWorld::HAww << endl;
     cout << "  PEGDA crosslinker XLww  (w/w)   = " << BMWorld::XLww << endl;
     cout << "  Thiol:double bond TDB_MR        = " << BMWorld::TDBMR << endl;
+    cout << "  f = " << f << endl;
+    cout << "  thiol_umol_per_mL = " << thiol_umol_per_mL << endl;
+    cout << "  ene_umol_per_mL = " << ene_umol_per_mL << endl;
     cout << "-------------------------------------------" << endl;
     return 0;
   }
@@ -1544,7 +1494,7 @@ void BMWorld::sproutAgentInWorld(int num, int patchType,
       << agent_counts["Activated Fibroblast"] << ",";
 
       /* Scaffold - Manuscript Table 4 */
-      file << BMWorld::E        << "," << BMWorld::Q         << ","
+      file << BMWorld::Gp        << "," << BMWorld::Q         << ","
       << BMWorld::massLoss << "," << BMWorld::pXL       << ","
       << BMWorld::poreWidth<< "," << BMWorld::meshSize  << ",";
 
@@ -1606,12 +1556,12 @@ void BMWorld::sproutAgentInWorld(int num, int patchType,
          << "Unactivated Fibroblast" << ","
          << "Activated Fibroblast" << ","
          /* Scaffold - Manuscript Table 4 */
-         << "Elastic Modulus (Pa)" << ","
+         << "Shear Storage Modulus G' (Pa)" << ","
          << "Swelling Ratio (%)" << ","
-         << "Mass Loss (%)" << ","
-         << "Crosslink Density (mmol/mL)" << ","
+         << "Dry-weight Loss w_l (%)" << ","
+         << "Crosslink Density (umol/mL)" << ","
          << "Pore Size (um)" << ","
-         << "Mesh Size (1/um)" << ","
+         << "Mesh Size (nm)" << ","
          /* Scaffold composition inputs */
          << "HA_ww (%)" << ","
          << "HA_wv (%)" << ","

@@ -329,17 +329,6 @@ public:
 #endif
 
   /*
-   * Description:Degrade Ca-Alg Patches and replace with immature tissue patch
-   * (no new ECM produced)
-   *
-   * Return:
-   *
-   * Parameters:        numOfPatches  -- number of biomaterial patches to "degrade"
-   * and be replaced with patch type tissue
-   */
-  void degradebiomaterial(int numOfPatches);
-
-  /*
    * Description: Print out extra info for debugging purposes
    *
    * Return:
@@ -376,22 +365,22 @@ public:
    ****************************************************************/
   static unsigned seed;
 
-  static float E;         // Elastic modulus, Pa
+  static float Gp;         // Shear storage modulus G', Pa
+  static float E_Pa;     // Elastic modulus, Pa
   static float poreWidth; // p, pore size, um
-  static float meshSize;  // mesh = 15000 / p, um^-1
+  static float meshSize;  // mesh = xi (nm), read by k34/k45/k53
+  static float xiNm;      // network mesh size from rubber elasticity, nm
   static float Q;         // Swelling ratio, % w/w
-  static float massLoss;  // w_l, mass loss of wet weight, %
-  static float massLoss0;
-  static float pXL;       // rho_XL, crosslinking density, mmol/mL
+  static float massLoss;  // w_l, dry-weight (polymer) loss, %; reported only
+  static float pXL;       // rho_XL, crosslinking density, µmol/mL
 
   static float HAww;  // HA concentration, % w/w of the polymer
   static float HAwv;  // HA concentration, % w/v
   static float TPwv;  // Total HA-Gtn polymer, % w/v
   static float XLww;  // Crosslinker (PEGDA) concentration, % w/w
-  static float TDBMR; // Thiol : double bond molar ratio, mol/mol
+  static float TDBMR; // Thiol : double bond molar ratio, mol/mol, computed from the recipe in userInput()
 
   static float patchpermm;      // Patches per millimetre
-  static int   initialPatches;  // Biomaterial patches present at t = 0
   static float totalVolumeML;   // Construct volume, mL
 
   static float liveCells, deadCells, deletedCells, prevCells;
@@ -399,7 +388,7 @@ public:
   /****************************************************************
   * BIOMATERIAL-RULE PARAMETERS  (Manuscript Table 4, c1 .. c19) *
   ****************************************************************/
-  /** E = c1 TPwv HAww + c2 HAww + c3 TPwv + c4 HAwv XLww + c5 XLww + c6 */
+  /** G' = c1 TPwv HAww + c2 HAww + c3 TPwv + c4 HAwv XLww + c5 XLww + c6 */
   enum ElasticModIdx {
     ELASTIC_POLYMER_HA_INTERACTION = 0,  // c1
     ELASTIC_HA_CONCENTRATION,            // c2
@@ -413,15 +402,15 @@ public:
                 "ElasticModulusParams field count must match BMWorld::ElasticModIdx");
   static float ElasticMod[ELASTIC_MOD_COUNT];
 
-  /** rho_XL = c7 - c8 TDB_MR */
-  enum XLDensityIdx {
-    XLDENSITY_BASELINE = 0,               // c7
-    XLDENSITY_THIOL_DOUBLE_BOND_EFFECT,   // c8
-    XLDENSITY_COUNT
-  };
-  static_assert(sizeof(CrosslinkDensityParams) / sizeof(double) == XLDENSITY_COUNT,
-                "CrosslinkDensityParams field count must match BMWorld::XLDensityIdx");
-  static float XLDensity[XLDENSITY_COUNT];
+  // /** rho_XL = c7 - c8 TDB_MR */
+  // enum XLDensityIdx {
+  //   XLDENSITY_BASELINE = 0,               // c7
+  //   XLDENSITY_THIOL_DOUBLE_BOND_EFFECT,   // c8
+  //   XLDENSITY_COUNT
+  // };
+  // static_assert(sizeof(CrosslinkDensityParams) / sizeof(double) == XLDENSITY_COUNT,
+  //               "CrosslinkDensityParams field count must match BMWorld::XLDensityIdx");
+  // static float XLDensity[XLDENSITY_COUNT];
 
   /** Q = (c9 HAww + c10) ln(t_m) + c11 HAww + c12 */
   enum SwellRatioIdx {

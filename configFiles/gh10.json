@@ -10,7 +10,10 @@
       "ha_wv_percent": 1.0, // CMHA-S stock, % w/v
       "gtn_wv_percent": 1.0, // Gtn-DTPH stock, % w/v
       "pegda_wv_percent": 0.25, // PEGDA final concentration, % w/v
-      "thiol_double_bond_molar_ratio": 0.1 // TDB_MR; not reported, TODO vs Zheng Shu 2004 [64]
+      "pegda_stock_wv_percent": 1.67, // PEGDA stock before mixing, % w/v (Shung 2017 §2.2.8 p.43); dilution f = 1 - 0.25/1.67 = 0.85
+      "ha_thiol_mmol_per_g": 0.89, // Free thiol content of CMHA-S, mmol/g (Vanderhooft 2009, measured).
+      "gtn_thiol_mmol_per_g": 0.57, // Free thiol content of Gtn-DTPH, mmol/g (Vanderhooft 2009, measured).
+      "pegda_mw_g_per_mol": 3400.0 // PEGDA molecular weight, g/mol (two acrylate C=C per molecule).
     },
     "initial_ecm": {
       "description": "Day-0 ECM per patch (Sircol, Section 2.2.5). Calibration initial condition, set per GH condition.",
@@ -134,9 +137,9 @@
       "collagen_synthesis": {
         "description": "Col_b = k33 - k34 mesh - k35 E; Col = Col_b k36 (log10(1+TGF+IL6)+k37)/(1+FGF+k38 IL8); rate branches on HAf vs HAn via k39..k43",
         "hours_between": 12, // k32
-        "baseline": 8922, // k33
+        "baseline": 892.2, // k33
         "mesh_effect": 25.54, // k34
-        "elasticity_effect": 0.02429, // k35
+        "elasticity_effect": 0.002429, // k35
         "activating_strength": 1, // k36
         "activating_offset": 0, // k37
         "il8_effect": 0.01, // k38
@@ -149,7 +152,7 @@
       "elastin_synthesis": {
         "description": "Eln_b = k44 - k45 mesh - k46 E; Eln = Eln_b ((k47 log10(1+TGF)+k48)/(k49 (1+FGF+TNF)) + k50). Uses the k32 interval.",
         "baseline": 183.4, // k44
-        "mesh_effect": 0.4702, // k45
+        "mesh_effect": 4.702, // k45
         "elasticity_effect": 0.0009759, // k46 (Table 5)
         "activating_strength": 1, // k47
         "activating_offset": 0, // k48
@@ -160,7 +163,7 @@
         "description": "HA_b = k52 - k53 mesh + k54 E; HA = HA_b (k55 log10(1+TGF+TNF+FGF) + k56); move+deposit with prob HA+k57, deposit here with prob k58 + HA/k59",
         "hours_between": 1, // k51
         "baseline": 16.68, // k52
-        "mesh_effect": 0.09942, // k53
+        "mesh_effect": 0.9942, // k53
         "elasticity_effect": 0.0003109, // k54 (Table 5)
         "activating_strength": 1, // k55
         "activating_offset": 0, // k56
@@ -171,19 +174,19 @@
     },
     "biomaterial": {
       "elastic_modulus": {
-        "description": "E = c1 TPwv HAww + c2 HAww + c3 TPwv + c4 HAwv XLww + c5 XLww + c6   [Pa]",
-        "polymer_ha_interaction": 7.07, // c1
-        "ha_concentration": 1.94, // c2
-        "polymer_concentration": 7.36, // c3
-        "ha_crosslinker_interaction": 3321, // c4
-        "crosslinker_concentration": 700, // c5
-        "baseline": 2068 // c6
+        "description": "G' = c1 TPwv HAww + c2 HAww + c3 TPwv + c4 HAwv XLww + c5 XLww + c6   [Pa]",
+        "polymer_ha_interaction": 0.1416, // c1
+        "ha_concentration": 0.0376, // c2
+        "polymer_concentration": 0.6396, // c3
+        "ha_crosslinker_interaction": 1333.2, // c4
+        "crosslinker_concentration": 8.16, // c5
+        "baseline": 0 // c6
       },
-      "crosslink_density": {
-        "description": "rho_XL = c7 - c8 TDB_MR   [mmol/mL]",
-        "baseline": 2.3, // c7
-        "thiol_double_bond_effect": 10.1 // c8
-      },
+      // "crosslink_density": {
+      //   "description": "rho_XL = c7 - c8 TDB_MR   [mmol/mL]",
+      //   "baseline": 2.3, // c7
+      //   "thiol_double_bond_effect": 10.1 // c8
+      // },
       "swell_ratio": {
         "description": "Q = (c9 HAww + c10) ln(t_min) + c11 HAww + c12   [% w/w]",
         "ha_time_effect": 0.4, // c9

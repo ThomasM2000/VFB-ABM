@@ -216,7 +216,7 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(FibroblastParams, migration, viability,
 /*                    BIOMATERIAL RULES  (Manuscript Table 4)                  */
 /* -------------------------------------------------------------------------- */
 
-/** E = c1 TPwv HAww + c2 HAww + c3 TPwv + c4 HAwv XLww + c5 XLww + c6  [Pa] */
+/** G' = c1 TPwv HAww + c2 HAww + c3 TPwv + c4 HAwv XLww + c5 XLww + c6  [Pa] */
 struct ElasticModulusParams {
   double polymer_ha_interaction = 0;    // c1
   double ha_concentration = 0;          // c2
@@ -230,13 +230,13 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(ElasticModulusParams, polymer_ha_interaction,
                                    ha_crosslinker_interaction,
                                    crosslinker_concentration, baseline)
 
-/** rho_XL = c7 - c8 TDB_MR   [mmol/mL] */
-struct CrosslinkDensityParams {
-  double baseline = 0;                 // c7
-  double thiol_double_bond_effect = 0; // c8
-};
-NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(CrosslinkDensityParams, baseline,
-                                   thiol_double_bond_effect)
+// /** rho_XL = c7 - c8 TDB_MR   [mmol/mL] */
+// struct CrosslinkDensityParams {
+//   double baseline = 0;                 // c7
+//   double thiol_double_bond_effect = 0; // c8
+// };
+// NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(CrosslinkDensityParams, baseline,
+//                                    thiol_double_bond_effect)
 
 /** Q = (c9 HAww + c10) ln(t_min) + c11 HAww + c12   [% w/w] */
 struct SwellRatioParams {
@@ -269,14 +269,12 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(PoreSizeParams, ha_quadratic_effect,
 
 struct BiomaterialParams {
   ElasticModulusParams elastic_modulus;
-  CrosslinkDensityParams crosslink_density;
+  // CrosslinkDensityParams crosslink_density;
   SwellRatioParams swell_ratio;
   MassLossParams mass_loss;
   PoreSizeParams pore_size;
 };
-NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(BiomaterialParams, elastic_modulus,
-                                   crosslink_density, swell_ratio, mass_loss,
-                                   pore_size)
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(BiomaterialParams, elastic_modulus, swell_ratio, mass_loss, pore_size)
 
 struct BiologyParametersConfig {
   FibroblastParams fibroblast;

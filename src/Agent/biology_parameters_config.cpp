@@ -249,11 +249,11 @@ void apply_biology_parameters(const BiologyParametersConfig &cfg) {
   BMWorld::ElasticMod[BMWorld::ELASTIC_BASELINE] =
       static_cast<float>(bm.elastic_modulus.baseline);
 
-  // c7, c8
-  BMWorld::XLDensity[BMWorld::XLDENSITY_BASELINE] =
-      static_cast<float>(bm.crosslink_density.baseline);
-  BMWorld::XLDensity[BMWorld::XLDENSITY_THIOL_DOUBLE_BOND_EFFECT] =
-      static_cast<float>(bm.crosslink_density.thiol_double_bond_effect);
+//   // c7, c8
+//   BMWorld::XLDensity[BMWorld::XLDENSITY_BASELINE] =
+//       static_cast<float>(bm.crosslink_density.baseline);
+//   BMWorld::XLDensity[BMWorld::XLDENSITY_THIOL_DOUBLE_BOND_EFFECT] =
+//       static_cast<float>(bm.crosslink_density.thiol_double_bond_effect);
 
   // c9 .. c12
   BMWorld::SwellRatio[BMWorld::SWELL_HA_TIME_EFFECT] =
