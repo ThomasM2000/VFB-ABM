@@ -13,11 +13,13 @@ B = "biology.fibroblast."
 M = "biology.biomaterial."
 
 # Cytokine base diffusivities in gh*.json (TNF, TGF, FGF, IL6, IL8, IL10), mm^2/min.
-# The code multiplies these by Q(t); this test scales all six together (Nicole, Nov 11).
+# Q no longer scales D in the code; the D tests scale all six together (Nicole, Nov 11).
 D_BASE = [0.00018, 0.000156, 0.000177, 0.000168, 0.000228, 0.000139]
+Q_REF = 15.71   # GH5 Q at 1400 min; config D x Q_REF = the D the code used before Q was removed
 def d_scale(f):
     return {f"chemistry.species.{i}.base_diffusivity_mm2_per_min": f * d
             for i, d in enumerate(D_BASE)}
+
 
 
 # name: (column prefix, off overrides, on overrides, expected off, expected on)
@@ -98,6 +100,9 @@ TESTS = {
     # D test: off = D x 0.1, base = D x 1, on = D x 3. No expected direction;
     # read Total Cells and Collagen with compare_to_data.py, ignore the verdict.
     "diffusion": ("Total Cells", d_scale(0.1), d_scale(3), "lower", "higher"),
+    # D test on the pre-removal D (config x Q_REF): off = x0.1, base = x1, on = x3.
+    # Run with --base-dscale 15.71 so the baseline is config x Q_REF too.
+    "diffusion_q": ("Total Cells", d_scale(0.1 * Q_REF), d_scale(3 * Q_REF), "lower", "higher"),
 
 }
 
@@ -128,6 +133,9 @@ def run(job):
         # wi = cfg["world_init"]
         # if wi["fibroblast_count"] > 0:   # counts in gh*.json are for the 3 mm world
         #     wi["fibroblast_count"] = max(1, round(wi["fibroblast_count"] * (float(a.world) / 3) ** 3))
+        if a.base_dscale != 1.0:                       # applies to base, off and on
+            for k, v in d_scale(a.base_dscale).items():
+                set_key(cfg, k, v)
 
         for k, v in overrides.items():
             set_key(cfg, k, v)
@@ -159,6 +167,9 @@ def main():
     p.add_argument("--jobs", type=int, default=os.cpu_count())
     p.add_argument("--out", default="output/verify")
     p.add_argument("--only", nargs="*", help="subset of test names")
+    p.add_argument("--base-dscale", type=float, default=1.0,
+                help="multiply all six cytokine D in every case, including baseline")
+
     a = p.parse_args()
 
     names = a.only or list(TESTS)
